@@ -97,7 +97,10 @@ function readGuidData(lines, guids, regexes) {
   }
 
   if (newguids.size > 0) {
-    process.stdout.write("Blocklist entry for new guids:\n");
+    process.stdout.write("Here is a list of all guids not yet blocked:\n");
+    process.stdout.write(newguidvalues.join("\n") + "\n");
+
+    process.stdout.write("\nBlocklist entry for new guids:\n");
 
     let guidstring;
     if (newguids.size > 1) {
