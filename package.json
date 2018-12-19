@@ -1,6 +1,6 @@
 {
   "name": "mozblocklistcheck",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Checks the blocklist for existing guids",
   "main": "index.js",
   "dependencies": {
@@ -9,6 +9,6 @@
   },
   "devDependencies": {},
   "author": "Philipp Kewisch",
-  "license": "MPL2.0",
+  "license": "MPL-2.0",
   "bin": "index.js"
 }
