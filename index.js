@@ -3,6 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * Portions Copyright (C) Philipp Kewisch, 2018 */
 
+global.fetch = require("node-fetch");
+
 var KintoClient = require("kinto-http");
 
 const COMMENT_CHAR = "#";

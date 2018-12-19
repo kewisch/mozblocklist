@@ -1,10 +1,11 @@
 {
   "name": "mozblocklistcheck",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Checks the blocklist for existing guids",
   "main": "index.js",
   "dependencies": {
-    "kinto-http": "^4.5.3"
+    "kinto-http": "^4.5.3",
+    "node-fetch": "^2.3.0"
   },
   "devDependencies": {},
   "author": "Philipp Kewisch",
