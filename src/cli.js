@@ -235,12 +235,15 @@ async function printBlocklistStatus(client) {
     .argv;
 
   let writer;
+  let remote;
   if (argv.stage) {
     writer = `https://${constants.STAGE_HOST}/v1/`;
+    remote = `https://${constants.STAGE_HOST}/v1/`;
   } else {
     writer = `https://${argv.writer || constants.PROD_HOST}/v1/`;
+    remote = `https://${argv.host}/v1/`;
   }
-  let client = new BlocklistKintoClient(`https://${argv.host}/v1/`, { writer });
+  let client = new BlocklistKintoClient(remote, { writer });
 
   switch (argv._[0]) {
     case "create":

@@ -29,5 +29,7 @@ mozblocklist check
 
 Get the current state of the blocklist (signed, work in progress, in review), on the staging instance.
 ```
-mozblocklistcheck -H settings-writer.stage.mozaws.net status
+mozblocklist -H settings-writer.stage.mozaws.net status
+# or
+mozblocklist -s status
 ```
