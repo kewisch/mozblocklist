@@ -458,6 +458,7 @@ module.exports = {
         /* known html elements */ "tr", "td", "th",
         /* mail/calendar words */ "to", "cc",
         /* Components */ "Ci", "Cc", "Cu", "Cr",
+        /* node symbols */ "fs",
       ]
     }],
 

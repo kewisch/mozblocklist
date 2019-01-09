@@ -11,5 +11,12 @@ module.exports = {
 
   STAGE_HOST: "settings-writer.stage.mozaws.net",
   PROD_HOST: "settings-writer.prod.mozaws.net",
-  PUBLIC_HOST: "firefox.settings.services.mozilla.com"
+  PUBLIC_HOST: "firefox.settings.services.mozilla.com",
+
+  REDASH_URL: "https://sql.telemetry.mozilla.org/",
+
+  // If you ever need to redo the data source id:
+  // let sources = await redash.getDataSources();
+  // let amodb = sources.find(source => source.name == "AMO-DB");
+  REDASH_AMO_DB: 25
 };

@@ -5,6 +5,11 @@
  * Portions Copyright (C) Philipp Kewisch, 2018 */
 
 var yargs = require("yargs");
+var RedashClient = require("redash-client");
+var ini = require("ini");
+var fs = require("fs");
+var os = require("os");
+var path = require("path");
 
 var BlocklistKintoClient = require("./kinto-client");
 var { regexEscape, waitForStdin, waitForInput, bold } = require("./utils");
@@ -64,22 +69,43 @@ function readGuidData(lines, guids, regexes) {
  * entry. This will start the interactive workflow
  *
  * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
- * @param {Boolean} create              If true, creation will also be prompted
- * @param {Boolean} canContinue         Also create the entry if there are work in progress items
+ * @param {Object} options                    The options for this call, see following
+ * @param {Boolean} options.create              If true, creation will also be prompted
+ * @param {Boolean} options.canContinue         Also create the entry if there are work in progress items
  */
-async function checkGuidsInteractively(client, create=false, canContinue=false) {
-  if (process.stdin.isTTY) {
+async function checkGuidsInteractively(client, { create = false, canContinue = false, guids = [], useIds = false }) {
+  if (process.stdin.isTTY && !guids.length) {
     console.log("Loading blocklist...");
   }
 
-  let [guids, regexes] = await client.loadBlocklist();
+  let [blockguids, blockregexes] = await client.loadBlocklist();
 
-  if (process.stdin.isTTY) {
+  if (process.stdin.isTTY && !guids.length) {
     console.log("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
   }
 
-  let data = await waitForStdin();
-  let [existing, newguids] = readGuidData(data, guids, regexes);
+  let data = guids.length ? guids : await waitForStdin();
+
+  if (useIds) {
+    let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
+    if (config && config.auth && config.auth.redash_key) {
+      console.log("Querying guids from AMO-DB via redash");
+      let redash = new RedashClient({
+        endPoint: constants.REDASH_URL,
+        apiToken: config.auth.redash_key
+      });
+      let result = await redash.queryAndWaitResult({
+        query: `SELECT guid FROM addons WHERE id IN (${data.join(",")})`,
+        data_source_id: constants.REDASH_AMO_DB
+      });
+
+      data = result.query_result.data.rows.map(row => row.guid);
+    } else {
+      throw new Error("Missing redash API key in ~/.amorc");
+    }
+  }
+
+  let [existing, newguids] = readGuidData(data, blockguids, blockregexes);
   let newguidvalues = [...newguids.values()];
 
   console.log("");
@@ -98,15 +124,19 @@ async function checkGuidsInteractively(client, create=false, canContinue=false) 
     console.log(bold("Here is a list of all guids not yet blocked:"));
     console.log(newguidvalues.join("\n"));
 
-    if (create) {
-      let guidstring;
-      if (newguids.size > 1) {
-        guidstring = "/^((" + newguidvalues.map(regexEscape).join(")|(") + "))$/";
-      } else {
-        guidstring = newguidvalues[0];
-      }
+    let guidstring;
+    if (newguids.size > 1) {
+      guidstring = "/^((" + newguidvalues.map(regexEscape).join(")|(") + "))$/";
+    } else {
+      guidstring = newguidvalues[0];
+    }
 
+    if (create) {
       await createBlocklistEntryInteractively(client, guidstring, canContinue);
+    } else {
+      console.log("");
+      console.log(bold("Here is the list of guids for kinto:"));
+      console.log(guidstring);
     }
   } else {
     console.log("Nothing new to block");
@@ -163,13 +193,16 @@ async function createBlocklistEntryInteractively(client, guids, canContinue=fals
 
   // Only prompt for version when not using a regex, this case is not very common.
   if (!usesRegex) {
-    minVersion = await waitForInput("Minimum version [0]:");
-    maxVersion = await waitForInput("Maximum version [*]:");
+    minVersion = await waitForInput("Minimum version [0]:") || "0";
+    maxVersion = await waitForInput("Maximum version [*]:") || "*";
   }
 
   let answer = await waitForInput("Ready to create and stage the blocklist entry? [yN]");
   if (answer == "y") {
-    await client.createBlocklistEntry(guidstring, bugid, name, reason, severity, minVersion, maxVersion);
+    await client.createBlocklistEntry(guids, bugid, name, reason, severity, minVersion, maxVersion);
+  } else {
+    console.log("In case you decide to do so later, here is the guid regex:");
+    console.log(guids);
   }
 }
 
@@ -221,6 +254,11 @@ async function printBlocklistStatus(client) {
       "conflicts": "writer",
       "describe": "Use the stage writer instead of the production writer"
     })
+    .option("i", {
+      "alias": "ids",
+      "boolean": true,
+      "describe": "Take add-on ids instead of guids"
+    })
     .command("check", "Find out what entries already exist in the blocklist")
     .command("create", "Stage a block for a set of guids")
     .command("status", "Check the current blocklist status")
@@ -237,18 +275,23 @@ async function printBlocklistStatus(client) {
   let writer;
   let remote;
   if (argv.stage) {
-    writer = `https://${constants.STAGE_HOST}/v1/`;
-    remote = `https://${constants.STAGE_HOST}/v1/`;
+    writer = `https://${constants.STAGE_HOST}/v1`;
+    remote = `https://${constants.STAGE_HOST}/v1`;
   } else {
-    writer = `https://${argv.writer || constants.PROD_HOST}/v1/`;
-    remote = `https://${argv.host}/v1/`;
+    writer = `https://${argv.writer || constants.PROD_HOST}/v1`;
+    remote = `https://${argv.host}/v1`;
   }
   let client = new BlocklistKintoClient(remote, { writer });
 
   switch (argv._[0]) {
     case "create":
     case "check":
-      await checkGuidsInteractively(client, argv._[0] == "create", !!argv["continue"]);
+      await checkGuidsInteractively(client, {
+        create: argv._[0] == "create",
+        canContinue:  !!argv["continue"],
+        guids: argv._.slice(1),
+        useIds: argv.ids
+      });
       break;
 
     case "status":
