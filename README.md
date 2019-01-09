@@ -12,6 +12,23 @@ or `npm link` in case you want to make changes to the sources.
 The program will load the blocklist and then takes guid entries from stdin. You can either pipe in a
 file, or you can enter them manually.
 
+Configuration
+-------------
+
+mozblocklist does not need any configuration, unless you use one of the features that require access
+to redash. This is for example if you use `mozblocklist check -i` to retrieve the guids for ids from
+redash.
+
+If you make use of [pyamo](https://github.com/kewisch/pyamo) and have configured it for use with
+redash you are all set. Otherwise, you can add a `~/.amorc` (or `%HOME%/amorc.ini` on Windows).
+
+You'll need to set your redash user api key (not the query key) in the `[auth]` section:
+
+```
+[auth]
+redash_key=42c85d86fd212538f4394f47c80fa62c
+```
+
 Examples
 --------
 
@@ -22,9 +39,17 @@ cat baddons | mozblocklist create
 ```
 
 Just check if the add-ons are already in the blocklist. Instead of reading from a file, the guids
-will be prompted for. This uses the public blocklist host by default.
+will be prompted for. This uses the public blocklist host by default. It will also take guids from
+stdin like in the example above, if you prefer.
 ```
 mozblocklist check
+```
+
+Check for add-ons in the blocklist, if you only have a file with the AMO ids. This requires the
+redash API key to be set in the configuration, see above.
+
+```
+cat badids | mozblicklist check -i
 ```
 
 Get the current state of the blocklist (signed, work in progress, in review), on the staging instance.
