@@ -29,9 +29,9 @@ var constants = require("./constants");
  * Reads guids from an array of lines, skipping empty lines or those commented with #
  *
  * @param {Array} lines                 The lines to parse
- * @param {BlocklistMap} guids          The Map with guids and blocklist details as
+ * @param {BlocklistMap} guids          The Map with guids and blocklist entry as
  *                                        provided by loadBlocklist
- * @param {BlocklistRegexMap} regexes   The Map with regexes and blocklist details as
+ * @param {BlocklistRegexMap} regexes   The Map with regexes and blocklist entry as
  *                                        provided by loadBlocklist
  * @return {[BlocklistMap, Set<String>]} An array with existing and new guids
  */
@@ -45,16 +45,16 @@ function readGuidData(lines, guids, regexes) {
       continue;
     }
     if (guids.has(guid)) {
-      let details = guids.get(guid);
-      existing.set(guid, details);
+      let entry = guids.get(guid);
+      existing.set(guid, entry);
     } else {
       let regexmatches = [...regexes.keys()].filter(re => guid.match(re));
       if (regexmatches.length) {
         if (regexmatches.length > 1) {
           console.error(`Warning: ${guid} appears in more than one regex block: ${regexmatches}`);
         }
-        let details = regexes.get(regexmatches[0]);
-        existing.set(guid, details);
+        let entry = regexes.get(regexmatches[0]);
+        existing.set(guid, entry);
       } else {
         newguids.add(guid);
       }
@@ -62,6 +62,67 @@ function readGuidData(lines, guids, regexes) {
   }
 
   return [existing, newguids];
+}
+
+async function displayBlocklist(client, format="json", loadAllGuids=false) {
+  if (format == "json") {
+    let addons = await client.bucket("blocklists").collection("addons").listRecords();
+    console.log(JSON.stringify(addons, null, 2));
+  } else if (format == "sql") {
+    if (process.stdin.isTTY) {
+      console.log("Loading blocklist...");
+    }
+    let [blockguids, blockregexes] = await client.loadBlocklist();
+
+    let data;
+    if (loadAllGuids) {
+      console.log("Loading all guids from AMO-DB via redash...");
+      let result = await redashSQL("SELECT guid FROM addons WHERE guid IS NOT NULL");
+      data = result.query_result.data.rows.map(row => row.guid);
+    } else {
+      if (process.stdin.isTTY) {
+        console.log("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
+      }
+      data = await waitForStdin();
+    }
+
+    console.log("Applying blocklist entries to guids...");
+
+    let guiddata = readGuidData(data, blockguids, blockregexes);
+    let all = "";
+
+    for (let [guid, entry] of guiddata[0].entries()) {
+      let range = entry.versionRange[0];
+      let multirange = entry.versionRange.length > 1 ? 1 : 0;
+      console.log(
+        `${all}SELECT "${guid}" AS guid, "${entry.details.created}" AS created, ` +
+        `"${entry.details.bug}" AS bug, ${range.severity} AS severity, ` +
+        `"${range.minVersion}" AS minVersion, "${range.maxVersion}" AS maxVersion, ` +
+        `${multirange} AS multirange`
+      );
+      if (!all) {
+        all = "UNION ALL ";
+      }
+    }
+  }
+}
+
+async function redashSQL(sql) {
+  let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
+  if (config && config.auth && config.auth.redash_key) {
+    let redash = new RedashClient({
+      endPoint: constants.REDASH_URL,
+      apiToken: config.auth.redash_key
+    });
+    let result = await redash.queryAndWaitResult({
+      query: sql,
+      data_source_id: constants.REDASH_AMO_DB
+    });
+
+    return result;
+  } else {
+    throw new Error("Missing redash API key in ~/.amorc");
+  }
 }
 
 /**
@@ -87,22 +148,9 @@ async function checkGuidsInteractively(client, { create = false, canContinue = f
   let data = guids.length ? guids : await waitForStdin();
 
   if (useIds) {
-    let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
-    if (config && config.auth && config.auth.redash_key) {
-      console.log("Querying guids from AMO-DB via redash");
-      let redash = new RedashClient({
-        endPoint: constants.REDASH_URL,
-        apiToken: config.auth.redash_key
-      });
-      let result = await redash.queryAndWaitResult({
-        query: `SELECT guid FROM addons WHERE id IN (${data.join(",")})`,
-        data_source_id: constants.REDASH_AMO_DB
-      });
-
-      data = result.query_result.data.rows.map(row => row.guid);
-    } else {
-      throw new Error("Missing redash API key in ~/.amorc");
-    }
+    console.log("Querying guids from AMO-DB via redash");
+    let result = await redashSQL(`SELECT guid FROM addons WHERE id IN (${data.join(",")})`);
+    data = result.query_result.data.rows.map(row => row.guid);
   }
 
   let [existing, newguids] = readGuidData(data, blockguids, blockregexes);
@@ -113,8 +161,8 @@ async function checkGuidsInteractively(client, { create = false, canContinue = f
   // Show existing guids for information
   if (existing.size) {
     console.log(bold("The following guids are already blocked:"));
-    for (let [guid, details] of existing.entries()) {
-      console.log(`${guid} - ${details.bug}`);
+    for (let [guid, entry] of existing.entries()) {
+      console.log(`${guid} - ${entry.details.bug}`);
     }
     console.log("");
   }
@@ -231,6 +279,24 @@ async function printBlocklistStatus(client) {
 (async function() {
   process.stdin.setEncoding("utf8");
 
+  function checkCreateCommand(type, subyargs) {
+    subyargs.positional("guids", {
+      describe: `The add-ons guids to ${type}`,
+      type: "string",
+    })
+      .default("guids", [], "<from stdin>")
+      .option("i", {
+        "alias": "ids",
+        "boolean": true,
+        "describe": "Take add-on ids instead of guids"
+      })
+      .option("c", {
+        "alias": "continue",
+        "boolean": true,
+        "describe": "Allow creation when there are work in progress items"
+      });
+  }
+
   let argv = yargs
     .option("H", {
       "alias": "host",
@@ -243,24 +309,33 @@ async function printBlocklistStatus(client) {
       // Can't have a real default here because it will conflict with the stage option
       describe: `The writer instance of kinto to use.                      [default: "${constants.PROD_HOST}"]`
     })
-    .option("c", {
-      "alias": "continue",
-      "boolean": true,
-      "describe": "Allow creation when there are work in progress items"
-    })
     .option("s", {
       "alias": "stage",
       "boolean": true,
       "conflicts": "writer",
       "describe": "Use the stage writer instead of the production writer"
     })
-    .option("i", {
-      "alias": "ids",
-      "boolean": true,
-      "describe": "Take add-on ids instead of guids"
+    .command("check [guids..]", "Find out what entries already exist in the blocklist", checkCreateCommand.bind(null, "check"))
+    .command("create [guids..]", "Stage a block for a set of guids", checkCreateCommand.bind(null, "create"))
+    .command("list", "Display the blocklist in different ways", (subyargs) => {
+      subyargs.option("f", {
+        "alias": "format",
+        "nargs": 1,
+        "choices": ["json", "sql"],
+        "default": "json",
+        "describe": "Output format"
+      })
+        .option("a", {
+          "alias": "all",
+          "boolean": true,
+          "describe": "Retrieve all guids from redash when using the sql output format"
+        })
+        .epilog(
+          "The 'json' output will show the raw blocklist.\n\n" +
+        "The 'sql' output will take a list of guids on stdin (or use the -a option) and show SQL" +
+        " statements to create a table out of them. This is useful for further processing on redash."
+        );
     })
-    .command("check", "Find out what entries already exist in the blocklist")
-    .command("create", "Stage a block for a set of guids")
     .command("status", "Check the current blocklist status")
     .command("review", "Request review for pending blocklist entries")
     .command("sign", "Sign a pending blocklist review")
@@ -269,7 +344,7 @@ async function printBlocklistStatus(client) {
     .example("echo 1285960 | $0 check -i", "The same, but check for the AMO id of the add-on")
     .example("echo 1285960 | $0 create -i", "The same, but also prompt for creating the blocklist entry")
     .example("$0 check", "Interactively enter a list of guids to check in the blocklist")
-    .demandCommand(1, "Error: Missing required command")
+    .demandCommand(1, 1, "Error: Missing required command")
     .wrap(120)
     .argv;
 
@@ -285,12 +360,16 @@ async function printBlocklistStatus(client) {
   let client = new BlocklistKintoClient(remote, { writer });
 
   switch (argv._[0]) {
+    case "list":
+      await displayBlocklist(client, argv.format, argv.all || false);
+      break;
+
     case "create":
     case "check":
       await checkGuidsInteractively(client, {
         create: argv._[0] == "create",
-        canContinue:  !!argv["continue"],
-        guids: argv._.slice(1),
+        canContinue: !!argv["continue"],
+        guids: argv.guids || [],
         useIds: argv.ids
       });
       break;

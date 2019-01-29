@@ -102,11 +102,17 @@ class BlocklistKintoClient extends KintoClient {
     let guids = new Map();
     let regexes = new Map();
 
-    for (let { guid, details } of addons.data) {
-      if (guid[0] == "/") {
-        regexes.set(new RegExp(guid.substring(1, guid.length - 1)), details);
+    for (let entry of addons.data) {
+      if (!entry.details.created) {
+        entry.details.created = new Date(entry.last_modified).toISOString();
+      }
+
+      if (entry.guid[0] == "/") {
+        regexes.set(new RegExp(entry.guid.substring(1, entry.guid.length - 1)), entry);
+      } else if (entry.guid[0] == "^") {
+        regexes.set(new RegExp(entry.guid), entry);
       } else {
-        guids.set(guid, details);
+        guids.set(entry.guid, entry);
       }
     }
 
@@ -122,7 +128,7 @@ class BlocklistKintoClient extends KintoClient {
    * @param {Number} severity   The severity of the block, defaults to HARD_BLOCK
    * @param {String} minVersion The minimum version to block, defaults to 0 (first)
    * @param {String} maxVersion The maximum version to block, defaults to * (all)
-   * @returns {Object}          The blocklist entry details from the server
+   * @returns {Object}          The blocklist entry from the server
    */
   async createBlocklistEntry(guid, bug, name, reason, severity=HARD_BLOCK, minVersion="0", maxVersion="*") {
     await this.ensureAuthorized();
