@@ -66,27 +66,28 @@ function readGuidData(lines, guids, regexes) {
 
 async function displayBlocklist(client, format="json", loadAllGuids=false) {
   if (format == "json") {
+    console.warn("Loading blocklist...");
     let addons = await client.bucket("blocklists").collection("addons").listRecords();
     console.log(JSON.stringify(addons, null, 2));
   } else if (format == "sql") {
     if (process.stdin.isTTY) {
-      console.log("Loading blocklist...");
+      console.warn("Loading blocklist...");
     }
     let [blockguids, blockregexes] = await client.loadBlocklist();
 
     let data;
     if (loadAllGuids) {
-      console.log("Loading all guids from AMO-DB via redash...");
+      console.warn("Loading all guids from AMO-DB via redash...");
       let result = await redashSQL("SELECT guid FROM addons WHERE guid IS NOT NULL");
       data = result.query_result.data.rows.map(row => row.guid);
     } else {
       if (process.stdin.isTTY) {
-        console.log("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
+        console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
       }
       data = await waitForStdin();
     }
 
-    console.log("Applying blocklist entries to guids...");
+    console.warn("Applying blocklist entries to guids...");
 
     let guiddata = readGuidData(data, blockguids, blockregexes);
     let all = "";
@@ -136,19 +137,19 @@ async function redashSQL(sql) {
  */
 async function checkGuidsInteractively(client, { create = false, canContinue = false, guids = [], useIds = false }) {
   if (process.stdin.isTTY && !guids.length) {
-    console.log("Loading blocklist...");
+    console.warn("Loading blocklist...");
   }
 
   let [blockguids, blockregexes] = await client.loadBlocklist();
 
   if (process.stdin.isTTY && !guids.length) {
-    console.log("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
+    console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
   }
 
   let data = guids.length ? guids : await waitForStdin();
 
   if (useIds) {
-    console.log("Querying guids from AMO-DB via redash");
+    console.warn("Querying guids from AMO-DB via redash");
     let result = await redashSQL(`SELECT guid FROM addons WHERE id IN (${data.join(",")})`);
     data = result.query_result.data.rows.map(row => row.guid);
   }
@@ -156,7 +157,7 @@ async function checkGuidsInteractively(client, { create = false, canContinue = f
   let [existing, newguids] = readGuidData(data, blockguids, blockregexes);
   let newguidvalues = [...newguids.values()];
 
-  console.log("");
+  console.warn("");
 
   // Show existing guids for information
   if (existing.size) {
