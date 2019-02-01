@@ -67,8 +67,10 @@ class BlocklistKintoClient extends KintoClient {
       server.on("request", (req, res) => {
         let query = url.parse(req.url, true).query;
         if (query.token) {
+          let token = Buffer.from(query.token, "base64").toString("ascii");
+          let tokendata = JSON.parse(token);
           res.end("OK");
-          resolve(query.token);
+          resolve(tokendata);
         } else {
           res.writeHead(404, { "Content-Type": "text/plain" });
           res.end("404 Not Found");
