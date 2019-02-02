@@ -12,6 +12,7 @@ var os = require("os");
 var path = require("path");
 
 var BlocklistKintoClient = require("./kinto-client");
+var BugzillaClient = require("./bugzilla");
 var { regexEscape, waitForStdin, waitForInput, bold } = require("./utils");
 var constants = require("./constants");
 
@@ -105,6 +106,33 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
         all = "UNION ALL ";
       }
     }
+  }
+}
+
+async function signBlocklist(client, bugzilla) {
+  console.warn("Signing blocklist...");
+  let res = await client.getBlocklistPreview();
+  await client.signBlocklist();
+
+  if (bugzilla.authenticated) {
+    let bugs = res.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
+    console.warn(`Marking bugs ${bugs.join(",")} as FIXED...`);
+
+    await bugzilla.update({
+      ids: bugs,
+      comment: { body: "Done" },
+      flags: [{
+        name: "needinfo",
+        status: "X"
+      }],
+      resolution: "FIXED",
+      status: "RESOLVED"
+    });
+    console.warn("Done");
+  } else {
+    let bugurls = res.data.map(entry => entry.details.bug);
+    console.warn("You don't have a bugzilla API key configued. Set one in ~/.amorc or visit these bugs manually:");
+    console.warn("\t" + bugurls.join("\n\t"));
   }
 }
 
@@ -358,7 +386,9 @@ async function printBlocklistStatus(client) {
     writer = `https://${argv.writer || constants.PROD_HOST}/v1`;
     remote = `https://${argv.host}/v1`;
   }
+  let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
   let client = new BlocklistKintoClient(remote, { writer });
+  let bugzilla = new BugzillaClient("https://bugzilla.mozilla.org", config.auth && config.auth.bugzilla_key);
 
   switch (argv._[0]) {
     case "list":
@@ -382,7 +412,7 @@ async function printBlocklistStatus(client) {
       await client.reviewBlocklist();
       break;
     case "sign":
-      await client.signBlocklist();
+      await signBlocklist(client, bugzilla);
       break;
     case "reject":
       await client.rejectBlocklist();

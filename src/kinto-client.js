@@ -149,6 +149,24 @@ class BlocklistKintoClient extends KintoClient {
     return entry;
   }
 
+  async getBlocklistPreview() {
+    await this.ensureAuthorized();
+
+    let collection = await this.bucket("blocklists").collection("addons");
+
+    let { headers } = await collection.client.execute({
+      headers: collection._getHeaders({}),
+      path: "/buckets/blocklists/collections/addons/records",
+      method: "HEAD"
+    }, {
+      "raw": true,
+      "return": collection._getRetry({})
+    });
+
+    return this.bucket("blocklists-preview").collection("addons")
+      .listRecords({ since: headers.get("ETag") });
+  }
+
   /**
    * Makes sure the blocklist is in one of the requested states, throws an error otherwise
    *

@@ -16,17 +16,21 @@ Configuration
 -------------
 
 mozblocklist does not need any configuration, unless you use one of the features that require access
-to redash. This is for example if you use `mozblocklist check -i` to retrieve the guids for ids from
-redash.
+to redash or bugzilla. This is for example if you use `mozblocklist check -i` to retrieve the guids
+for ids from redash, or if you want to have bugs automatically marked as fixed when using
+`mozblocklist sign`.
 
-If you make use of [pyamo](https://github.com/kewisch/pyamo) and have configured it for use with
-redash you are all set. Otherwise, you can add a `~/.amorc` (or `%HOME%/amorc.ini` on Windows).
+If you make use of [pyamo](https://github.com/kewisch/pyamo) you will already have the redash
+config, but may need to add a bugzilla api key.
 
-You'll need to set your redash user api key (not the query key) in the `[auth]` section:
+To create the config, you can add a `~/.amorc` (or `%HOME%/amorc.ini` on Windows). This happens to
+be the same file that [pyamo](https://github.com/kewisch/pyamo) uses. You'll need to set your redash
+user api key (not the query key) and bugzilla api token in the `[auth]` section:
 
 ```
 [auth]
 redash_key=42c85d86fd212538f4394f47c80fa62c
+bugzilla_key=8342c234ff833e8842a492d482eb24
 ```
 
 Examples
@@ -57,4 +61,10 @@ Get the current state of the blocklist (signed, work in progress, in review), on
 mozblocklist -H settings-writer.stage.mozaws.net status
 # or
 mozblocklist -s status
+```
+
+When asked to review a block, you can sign it using this command. Bugzilla bugs will automatically
+be closed and needinfos removed.
+```
+mozblocklist sign
 ```
