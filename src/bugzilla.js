@@ -10,7 +10,7 @@ class BugzillaClient {
   }
 
   get authenticated() {
-    return !!this.api_key;
+    return !!this.apikey;
   }
 
   async get(ids) {
