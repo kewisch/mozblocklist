@@ -17,6 +17,11 @@ class BugzillaClient {
     return fetch(`${this.baseurl}/rest/bug?id=${ids.join(",")}&api_key=${this.apikey}`).then(resp => resp.json());
   }
 
+  async getComments(ids) {
+    let firstid = ids[0];
+    return fetch(`${this.baseurl}/rest/bug/${firstid}/comment?ids=${ids.join("&ids=")}`).then(resp => resp.json());
+  }
+
   async update(info) {
     let firstid = info.ids[0];
     let res = await fetch(`${this.baseurl}/rest/bug/${firstid}?api_key=${this.apikey}`, {

@@ -109,9 +109,17 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
   }
 }
 
-async function signBlocklist(client, bugzilla) {
+async function reviewAndSignBlocklist(client, bugzilla) {
+  let pending = await displayPending(client, bugzilla);
+  let answer = await waitForInput("Ready to sign? [yN] ");
+  if (answer == "y") {
+    await signBlocklist(client, bugzilla, pending);
+  }
+}
+
+async function signBlocklist(client, bugzilla, pending=null) {
   console.warn("Signing blocklist...");
-  let res = await client.getBlocklistPreview();
+  let res = pending || await client.getBlocklistPreview();
   await client.signBlocklist();
 
   if (bugzilla.authenticated) {
@@ -133,6 +141,87 @@ async function signBlocklist(client, bugzilla) {
     let bugurls = res.data.map(entry => entry.details.bug);
     console.warn("You don't have a bugzilla API key configued. Set one in ~/.amorc or visit these bugs manually:");
     console.warn("\t" + bugurls.join("\n\t"));
+  }
+}
+
+async function getCommentsSince(bugzilla, data) {
+  let res = await bugzilla.getComments(Object.keys(data));
+  let comments = {};
+  console.log(res);
+  for (let [id, entry] of Object.entries(res.bugs)) {
+    comments[id] = [];
+    for (let comment of entry.comments) {
+      let creation = new Date(comment.creation_time);
+      if (creation > data[id]) {
+        comments[id].push(`[${comment.time}|${comment.author}] - ${comment.text}`);
+      }
+    }
+  }
+
+  return comments;
+}
+
+function getSeverity(severity) {
+  let map = { 1: "soft", 3: "hard" };
+  return map[severity] || `unknown (${severity})`;
+}
+
+async function displayPending(client, bugzilla) {
+  let pending = await client.getBlocklistPreview();
+
+  let bugData = pending.data.reduce((obj, entry) => {
+    obj[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
+    return obj;
+  }, {});
+
+  let comments = pending.data.length ? await getCommentsSince(bugzilla, bugData) : {};
+
+  for (let entry of pending.data) {
+    console.log(`Entry ${entry.id} - ${entry.details.name}`);
+    if (!entry.enabled) {
+      console.log("\tWarning: The blocklist entry is marked disabled");
+    }
+
+    console.log("\tReason: " + entry.details.why);
+    console.log("\tBug: " + entry.details.bug);
+    if (entry.versionRange.length == 1 &&
+        entry.versionRange[0].minVersion == "0" &&
+        entry.versionRange[0].maxVersion == "*") {
+      console.log("\tRange: Blocking all versions, severity " + getSeverity(entry.versionRange[0].severity));
+    } else {
+      console.log("\tRange: Partial block with the following version ranges:");
+      for (let range of entry.versionRange) {
+        console.log(`\t\t ${range.minVersion} - ${range.maxVersion} (severity ${getSeverity(range.severity)})`);
+      }
+    }
+
+    if (entry.guid.startsWith("/")) {
+      try {
+        // eslint-disable-next-line no-new
+        new RegExp(entry.guid.substring(1, entry.guid.length - 1));
+        console.log("\tGUIDs (valid): " + entry.guid);
+      } catch (e) {
+        console.log("\tGUIDs (INVALID): " + entry.guid);
+      }
+    } else {
+      console.log("\tGUID: " + entry.guid);
+    }
+
+    if (entry.prefs.length) {
+      console.log("Prefs: ", entry.prefs);
+    }
+
+    let bugId = entry.details.bug.match(/id=(\d+)/)[1];
+    if (bugId in comments) {
+      console.log("\tComments since the block was staged:");
+      for (let comment of comments[bugId]) {
+        console.log("\t\t" + comment.replace(/\n/g, "\n\t\t\t"));
+      }
+    }
+  }
+
+  if (!pending.data.length) {
+    console.log("No blocks pending");
   }
 }
 
@@ -367,7 +456,8 @@ async function printBlocklistStatus(client) {
     })
     .command("status", "Check the current blocklist status")
     .command("review", "Request review for pending blocklist entries")
-    .command("sign", "Sign a pending blocklist review")
+    .command("pending", "Show blocklist entries pending for signature")
+    .command("sign", "Sign pending blocklist entries after verification")
     .command("reject", "Reject a pending blocklist review")
     .example("echo guid@example.com | $0 check", "Check if guid@example.com is in the blocklist")
     .example("echo 1285960 | $0 check -i", "The same, but check for the AMO id of the add-on")
@@ -405,6 +495,10 @@ async function printBlocklistStatus(client) {
       });
       break;
 
+    case "pending":
+      await displayPending(client, bugzilla);
+      break;
+
     case "status":
       await printBlocklistStatus();
       break;
@@ -412,7 +506,7 @@ async function printBlocklistStatus(client) {
       await client.reviewBlocklist();
       break;
     case "sign":
-      await signBlocklist(client, bugzilla);
+      await reviewAndSignBlocklist();
       break;
     case "reject":
       await client.rejectBlocklist();
