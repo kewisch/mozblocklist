@@ -515,7 +515,7 @@ async function printBlocklistStatus(client) {
       await client.reviewBlocklist();
       break;
     case "sign":
-      await reviewAndSignBlocklist();
+      await reviewAndSignBlocklist(client, bugzilla);
       break;
     case "reject":
       await client.rejectBlocklist();
