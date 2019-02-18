@@ -150,6 +150,14 @@ class BlocklistKintoClient extends KintoClient {
   }
 
   async getBlocklistPreview() {
+    return this.compareAddonCollection("blocklists-preview");
+  }
+
+  async getWorkInProgress() {
+    return this.compareAddonCollection("staging");
+  }
+
+  async compareAddonCollection(compareWithBucket) {
     await this.ensureAuthorized();
 
     let collection = await this.bucket("blocklists").collection("addons");
@@ -163,7 +171,7 @@ class BlocklistKintoClient extends KintoClient {
       "return": collection._getRetry({})
     });
 
-    return this.bucket("blocklists-preview").collection("addons")
+    return this.bucket(compareWithBucket).collection("addons")
       .listRecords({ since: headers.get("ETag") });
   }
 

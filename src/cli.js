@@ -165,8 +165,8 @@ function getSeverity(severity) {
   return map[severity] || `unknown (${severity})`;
 }
 
-async function displayPending(client, bugzilla) {
-  let pending = await client.getBlocklistPreview();
+async function displayPending(client, bugzilla, compareWith="blocklists-preview") {
+  let pending = await client.compareAddonCollection(compareWith);
 
   let bugData = pending.data.reduce((obj, entry) => {
     obj[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
@@ -457,7 +457,13 @@ async function printBlocklistStatus(client) {
     })
     .command("status", "Check the current blocklist status")
     .command("review", "Request review for pending blocklist entries")
-    .command("pending", "Show blocklist entries pending for signature")
+    .command("pending", "Show blocklist entries pending for signature", (subyargs) => {
+      subyargs.option("w", {
+        "alias": "wip",
+        "boolean": true,
+        "describe": "Show work in progress items instead of those pending review"
+      });
+    })
     .command("sign", "Sign pending blocklist entries after verification")
     .command("reject", "Reject a pending blocklist review")
     .example("echo guid@example.com | $0 check", "Check if guid@example.com is in the blocklist")
@@ -497,7 +503,7 @@ async function printBlocklistStatus(client) {
       break;
 
     case "pending":
-      await displayPending(client, bugzilla);
+      await displayPending(client, bugzilla, argv.wip ? "staging" : "blocklists-preview");
       break;
 
     case "status":
