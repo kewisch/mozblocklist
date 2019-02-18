@@ -416,6 +416,8 @@ async function printBlocklistStatus(client) {
       });
   }
 
+  let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
+
   let argv = yargs
     .option("H", {
       "alias": "host",
@@ -471,6 +473,7 @@ async function printBlocklistStatus(client) {
     .example("echo 1285960 | $0 create -i", "The same, but also prompt for creating the blocklist entry")
     .example("$0 check", "Interactively enter a list of guids to check in the blocklist")
     .demandCommand(1, 1, "Error: Missing required command")
+    .config(config ? config.mozblocklist || {} : {})
     .wrap(120)
     .argv;
 
@@ -483,7 +486,6 @@ async function printBlocklistStatus(client) {
     writer = `https://${argv.writer || constants.PROD_HOST}/v1`;
     remote = `https://${argv.host}/v1`;
   }
-  let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
   let client = new BlocklistKintoClient(remote, { writer });
   let bugzilla = new BugzillaClient("https://bugzilla.mozilla.org", config.auth && config.auth.bugzilla_key);
 
