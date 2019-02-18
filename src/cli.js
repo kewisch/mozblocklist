@@ -139,7 +139,7 @@ async function signBlocklist(client, bugzilla, pending=null) {
     console.warn("Done");
   } else {
     let bugurls = res.data.map(entry => entry.details.bug);
-    console.warn("You don't have a bugzilla API key configued. Set one in ~/.amorc or visit these bugs manually:");
+    console.warn("You don't have a bugzilla API key configured. Set one in ~/.amorc or visit these bugs manually:");
     console.warn("\t" + bugurls.join("\n\t"));
   }
 }
@@ -147,7 +147,6 @@ async function signBlocklist(client, bugzilla, pending=null) {
 async function getCommentsSince(bugzilla, data) {
   let res = await bugzilla.getComments(Object.keys(data));
   let comments = {};
-  console.log(res);
   for (let [id, entry] of Object.entries(res.bugs)) {
     comments[id] = [];
     for (let comment of entry.comments) {
@@ -181,6 +180,8 @@ async function displayPending(client, bugzilla) {
     if (!entry.enabled) {
       console.log("\tWarning: The blocklist entry is marked disabled");
     }
+
+    console.log(`\tURL: ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.id}/attributes`);
 
     console.log("\tReason: " + entry.details.why);
     console.log("\tBug: " + entry.details.bug);
