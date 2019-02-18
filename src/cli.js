@@ -109,6 +109,33 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
   }
 }
 
+async function reviewBlocklist(client, bugzilla, [reviewerName, reviewerEmail, ]) { // eslint-disable-line array-bracket-spacing
+  let pending = await displayPending(client, bugzilla, "staging");
+  let answer = await waitForInput("Ready to review? [yN] ");
+  if (answer == "y") {
+    await client.reviewBlocklist();
+
+    if (bugzilla.authenticated && reviewerName && reviewerEmail) {
+      let bugs = pending.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
+      console.warn(`Requesting review from ${reviewerName} for bugs ${bugs.join(",")}...`);
+
+      await bugzilla.update({
+        ids: bugs,
+        comment: { body: `The block has been staged. ${reviewerName}, can you review and push?` },
+        flags: [{
+          name: "needinfo",
+          status: "?",
+          requestee: reviewerEmail
+        }]
+      });
+    } else {
+      let bugurls = res.data.map(entry => entry.details.bug);
+      console.warn("You don't have a bugzilla API key or reviewer configured. Set one in ~/.amorc or visit these bugs manually:");
+      console.warn("\t" + bugurls.join("\n\t"));
+    }
+  }
+}
+
 async function reviewAndSignBlocklist(client, bugzilla) {
   let pending = await displayPending(client, bugzilla);
   let answer = await waitForInput("Ready to sign? [yN] ");
@@ -458,7 +485,33 @@ async function printBlocklistStatus(client) {
         );
     })
     .command("status", "Check the current blocklist status")
-    .command("review", "Request review for pending blocklist entries")
+    .command("review", "Request review for pending blocklist entries", (subyargs) => {
+      subyargs.option("r", {
+        "alias": "reviewer",
+        "type": "array",
+        "default": [],
+        "coerce": (reviewer) => {
+          if (reviewer.length == 1) {
+            let caseMap = new Map(Object.keys(config.reviewers || {}).map(name => [name.toLowerCase(), name]));
+            let name = reviewer[0].toLowerCase();
+            if (caseMap.has(name)) {
+              reviewer = config.reviewers[caseMap.get(name)].split(",");
+            } else {
+              throw new Error("Error: Could not find reviewer alias " + reviewer[0]);
+            }
+          } else if (reviewer.length == 2) {
+            if (!reviewer[1].includes("@")) {
+              throw new Error(`Error: ${reviewer[1]} is not an email address`);
+            }
+          } else if (reviewer.length != 0) {
+            throw new Error("Invalid reviewer arguments: " + reviewer.join(" "));
+          }
+
+          return reviewer;
+        },
+        "describe": "A reviewer alias from ~/.amorc that will review and push the block, or the name and email of the reviewer"
+      });
+    })
     .command("pending", "Show blocklist entries pending for signature", (subyargs) => {
       subyargs.option("w", {
         "alias": "wip",
@@ -512,7 +565,7 @@ async function printBlocklistStatus(client) {
       await printBlocklistStatus();
       break;
     case "review":
-      await client.reviewBlocklist();
+      await reviewBlocklist(client, bugzilla, argv.reviewer);
       break;
     case "sign":
       await reviewAndSignBlocklist(client, bugzilla);
