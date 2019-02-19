@@ -251,6 +251,8 @@ async function displayPending(client, bugzilla, compareWith="blocklists-preview"
   if (!pending.data.length) {
     console.log("No blocks pending");
   }
+
+  return pending;
 }
 
 async function redashSQL(sql) {
