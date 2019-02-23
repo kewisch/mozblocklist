@@ -65,6 +65,14 @@ function readGuidData(lines, guids, regexes) {
   return [existing, newguids];
 }
 
+/**
+ * Display the blocklist in various formats.
+ *
+ * @param {BlocklistKintoClient} client       The kinto client to access the blocklist
+ * @param {String} format                     The format, json or sql.
+ * @param {Boolean} loadAllGuids              For the SQL format, load guids from the AMO database
+ *                                              instead of stdin.
+ */
 async function displayBlocklist(client, format="json", loadAllGuids=false) {
   if (format == "json") {
     console.warn("Loading blocklist...");
@@ -109,7 +117,15 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
   }
 }
 
-async function reviewBlocklist(client, bugzilla, [reviewerName, reviewerEmail, ]) { // eslint-disable-line array-bracket-spacing
+/**
+ * Send work in progress blocks to review.
+ *
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {String} reviewerName               The reviewer's name (e.g. first name)
+ * @param {String} reviewerEmail              The reviewer's email.
+ */
+async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
   let pending = await displayPending(client, bugzilla, "staging");
   let answer = await waitForInput("Ready to review? [yN] ");
   if (answer == "y") {
@@ -130,12 +146,19 @@ async function reviewBlocklist(client, bugzilla, [reviewerName, reviewerEmail, ]
       });
     } else {
       let bugurls = res.data.map(entry => entry.details.bug);
-      console.warn("You don't have a bugzilla API key or reviewer configured. Set one in ~/.amorc or visit these bugs manually:");
+      console.warn("You don't have a bugzilla API key or reviewer configured. Set one in ~/.amorc" +
+                   " or visit these bugs manually:");
       console.warn("\t" + bugurls.join("\n\t"));
     }
   }
 }
 
+/**
+ * Show blocks in the preview list and then sign after asking.
+ *
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ */
 async function reviewAndSignBlocklist(client, bugzilla) {
   let pending = await displayPending(client, bugzilla);
   let answer = await waitForInput("Ready to sign? [yN] ");
@@ -144,6 +167,14 @@ async function reviewAndSignBlocklist(client, bugzilla) {
   }
 }
 
+/**
+ * Sign the blocklist, pushing the block.
+ *
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {?Object} pending                   The pending blocklist data in case it was retrieved
+ *                                              before.
+ */
 async function signBlocklist(client, bugzilla, pending=null) {
   console.warn("Signing blocklist...");
   let res = pending || await client.getBlocklistPreview();
@@ -166,11 +197,19 @@ async function signBlocklist(client, bugzilla, pending=null) {
     console.warn("Done");
   } else {
     let bugurls = res.data.map(entry => entry.details.bug);
-    console.warn("You don't have a bugzilla API key configured. Set one in ~/.amorc or visit these bugs manually:");
+    console.warn("You don't have a bugzilla API key configured. Set one in ~/.amorc or visit" +
+                 " these bugs manually:");
     console.warn("\t" + bugurls.join("\n\t"));
   }
 }
 
+/**
+ * Get bugzilla comments since a certain date.
+ *
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {Object<Number,Date>} data          Map between bug id and date
+ * @return {Promise<Object<Number,String[]>>} Map between bug id and comments
+ */
 async function getCommentsSince(bugzilla, data) {
   let res = await bugzilla.getComments(Object.keys(data));
   let comments = {};
@@ -187,11 +226,25 @@ async function getCommentsSince(bugzilla, data) {
   return comments;
 }
 
+/**
+ * Get the severity string based on the constant
+ *
+ * @param {Number} severity     The severity constant
+ * @return {String}             The severity string
+ */
 function getSeverity(severity) {
   let map = { 1: "soft", 3: "hard" };
   return map[severity] || `unknown (${severity})`;
 }
 
+/**
+ * Display pending blocks.
+ *
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {String} compareWith                The collection to compare with. This is usually
+ *                                              blocklists-preview or staging.
+ */
 async function displayPending(client, bugzilla, compareWith="blocklists-preview") {
   let pending = await client.compareAddonCollection(compareWith);
 
@@ -255,6 +308,12 @@ async function displayPending(client, bugzilla, compareWith="blocklists-preview"
   return pending;
 }
 
+/**
+ * Get SQL data from redash
+ *
+ * @param {String} sql          The SQL to query
+ * @return {Promise<Object>}    The redash response
+ */
 async function redashSQL(sql) {
   let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
   if (config && config.auth && config.auth.redash_key) {
@@ -333,15 +392,48 @@ async function checkGuidsInteractively(client, bugzilla, { create = false, canCo
   }
 }
 
+/**
+ * Create the markdown description for new blocklisting bugs
+ *
+ * @param {String} name                 The extension name.
+ * @param {String} versions             The version range(s).
+ * @param {String} reason               The reason to block.
+ * @param {Number} severity             The blocklist severity constant.
+ * @param {String[]} guids              An array of guids to block.
+ * @param {?String} additionalInfo      Additional information for the bug.
+ * @param {?String} platformVersions    The platform version range.
+ * @return {String}                     The markdown description.
+ */
 function compileDescription(name, versions, reason, severity, guids, additionalInfo=null, platformVersions="<all platforms>") {
+  /**
+   * Removes backticks from the start of each line for use in a backticked string.
+   *
+   * @param {String} str    Input string
+   * @return {String}       The removed backtick string
+   */
   function backtick(str) {
     return str.replace(/^\s*```/mg, "").trim();
   }
+
+  /**
+   * Replaces links in the string with hxxp:// links, except for AMO links
+   *
+   * @param {String} str    Input string
+   * @return {String}       The sanitized string
+   */
   function unlink(str) {
     return str.replace(/http(s?):\/\/(?!(reviewers\.)?addons.mozilla.org)/g, "hxxp$1://");
   }
+
+  /**
+   * Create a markdown table with an empty header based on the array. The array is an array of rows.
+   * Each row is an array of columns.
+   *
+   * @param {Array<String[]>} arr        Array of cells
+   * @return {String}                    The markdown table
+   */
   function table(arr) {
-    function escapeTable(str) {
+    function escapeTable(str) { // eslint-disable-line require-jsdoc
       return str.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
     }
     return "| | |\n|-|-|\n|" + arr.map((row) => {
@@ -457,6 +549,12 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
   }
 }
 
+/**
+ * Create the kinto guid string, so string with regex or a simple uuid
+ *
+ * @param {String[]} guids      The array of guids
+ * @return {String}             The compiled guid string
+ */
 function createGuidString(guids) {
   if (guids.length > 1) {
     return "/^((" + guids.map(regexEscape).join(")|(") + "))$/";
@@ -490,6 +588,12 @@ async function printBlocklistStatus(client) {
 (async function() {
   process.stdin.setEncoding("utf8");
 
+  /**
+   * yargs handler function for the check and create commands. The type argument should be bound.
+   *
+   * @param {String} type       The type of command (check/create)
+   * @param {Object} subyargs   The yargs object
+   */
   function checkCreateCommand(type, subyargs) {
     subyargs.positional("guids", {
       describe: `The add-ons guids to ${type}`,
@@ -630,7 +734,7 @@ async function printBlocklistStatus(client) {
       await printBlocklistStatus();
       break;
     case "review":
-      await reviewBlocklist(client, bugzilla, argv.reviewer);
+      await reviewBlocklist(client, bugzilla, argv.reviewer[0], argv.reviewer[1]);
       break;
     case "sign":
       await reviewAndSignBlocklist(client, bugzilla);

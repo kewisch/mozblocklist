@@ -22,6 +22,9 @@ class BlocklistKintoClient extends KintoClient {
    * Construct the kinto client. Remote and options are the same as for KintoClient. There is an
    * additional option `writer` which is the hostname of the settings-writer instance. When
    * authorize() is called, the client will automatically switch to it.
+   *
+   * @param {String} remote     The remote URL.
+   * @param {Object} options    The options object.
    */
   constructor(remote, options={}) {
     let writer = options.writer;
@@ -125,11 +128,12 @@ class BlocklistKintoClient extends KintoClient {
    *
    * @param {String} guid       The guids, either a single guid or a string with a regex
    * @param {String} bug        The ID of the bug for this entry
+   * @param {String} name       The name of this block
    * @param {String} reason     The reason for blocking
    * @param {Number} severity   The severity of the block, defaults to HARD_BLOCK
    * @param {String} minVersion The minimum version to block, defaults to 0 (first)
    * @param {String} maxVersion The maximum version to block, defaults to * (all)
-   * @returns {Object}          The blocklist entry from the server
+   * @return {Object}           The blocklist entry from the server
    */
   async createBlocklistEntry(guid, bug, name, reason, severity=HARD_BLOCK, minVersion="0", maxVersion="*") {
     await this.ensureAuthorized();

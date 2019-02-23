@@ -3,6 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
+/**
+ * A simple bugzilla REST API client.
+ */
 class BugzillaClient {
   constructor(baseurl, apikey) {
     this.baseurl = baseurl;
