@@ -278,11 +278,12 @@ async function redashSQL(sql) {
  * entry. This will start the interactive workflow
  *
  * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
  * @param {Object} options                    The options for this call, see following
  * @param {Boolean} options.create              If true, creation will also be prompted
  * @param {Boolean} options.canContinue         Also create the entry if there are work in progress items
  */
-async function checkGuidsInteractively(client, { create = false, canContinue = false, guids = [], useIds = false }) {
+async function checkGuidsInteractively(client, bugzilla, { create = false, canContinue = false, guids = [], useIds = false }) {
   if (process.stdin.isTTY && !guids.length) {
     console.warn("Loading blocklist...");
   }
@@ -320,23 +321,49 @@ async function checkGuidsInteractively(client, { create = false, canContinue = f
     console.log(bold("Here is a list of all guids not yet blocked:"));
     console.log(newguidvalues.join("\n"));
 
-    let guidstring;
-    if (newguids.size > 1) {
-      guidstring = "/^((" + newguidvalues.map(regexEscape).join(")|(") + "))$/";
-    } else {
-      guidstring = newguidvalues[0];
-    }
-
     if (create) {
-      await createBlocklistEntryInteractively(client, guidstring, canContinue);
+      await createBlocklistEntryInteractively(client, bugzilla, newguidvalues, canContinue);
     } else {
       console.log("");
       console.log(bold("Here is the list of guids for kinto:"));
-      console.log(guidstring);
+      console.log(createGuidString(newguidvalues));
     }
   } else {
     console.log("Nothing new to block");
   }
+}
+
+function compileDescription(name, versions, reason, severity, guids, additionalInfo=null, platformVersions="<all platforms>") {
+  function backtick(str) {
+    return str.replace(/^\s*```/mg, "").trim();
+  }
+  function unlink(str) {
+    return str.replace(/http(s?):\/\/(?!(reviewers\.)?addons.mozilla.org)/g, "hxxp$1://");
+  }
+  function table(arr) {
+    function escapeTable(str) {
+      return str.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
+    }
+    return "| | |\n|-|-|\n|" + arr.map((row) => {
+      return row.map(escapeTable).join("|");
+    }).join("|\n|") + "|\n";
+  }
+
+  let descr = table([
+    ["Extension name", name],
+    ["Extension versions affected", versions],
+    ["Platforms affected", platformVersions],
+    ["Block severity", getSeverity(severity)]
+  ]);
+
+  descr += "\n### Reason\n" + unlink(reason);
+  descr += "\n\n### Extension GUIDs\n```\n" + backtick(guids.join("\n")) + "\n```";
+
+  if (additionalInfo) {
+    descr += "\n\n### Additional Information\n" + unlink(additionalInfo.trim());
+  }
+
+  return descr;
 }
 
 /**
@@ -344,12 +371,11 @@ async function checkGuidsInteractively(client, { create = false, canContinue = f
  * blocklist to be clean and not work in progress
  *
  * @param {BlocklistKintoClient} client       The blocklist client to create with
- * @param {String} guids                The guid strings for the blocklist entry
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {String[]} guids                The guid strings for the blocklist entry
  * @param {Boolean} canContinue         Also create the entry if there are work in progress items
  */
-async function createBlocklistEntryInteractively(client, guids, canContinue=false) {
-  let usesRegex = guids.startsWith("/");
-
+async function createBlocklistEntryInteractively(client, bugzilla, guids, canContinue=false) {
   let requestedStates = ["signed"];
   if (canContinue) {
     requestedStates.push("work-in-progress");
@@ -357,15 +383,23 @@ async function createBlocklistEntryInteractively(client, guids, canContinue=fals
   await client.ensureBlocklistState(requestedStates);
 
   let bugid;
+  let additionalInfo = null;
   while (true) {
-    bugid = await waitForInput("Bug id or link:");
+    bugid = await waitForInput("Bug id or link (leave empty to create):");
     bugid = bugid.replace("https://bugzilla.mozilla.org/show_bug.cgi?id=", "");
-    if (bugid && !isNaN(parseInt(bugid, 10))) {
+    if (!bugid && !bugzilla.authenticated) {
+      console.log("You need to specify a bugzilla API key in the config or enter a bug id here");
+    } else if (bugid && isNaN(parseInt(bugid, 10))) {
+      console.log("Invalid bug id or link");
+    } else {
       break;
     }
-
-    console.log("Invalid bug id or link");
   }
+
+  if (!bugid) {
+    additionalInfo = await waitForInput("Any additional info for the bug?", false);
+  }
+
 
   let name = await waitForInput("Name for this block:", false);
   let reason = await waitForInput("Reason for this block:", false);
@@ -388,17 +422,46 @@ async function createBlocklistEntryInteractively(client, guids, canContinue=fals
   let maxVersion = "*";
 
   // Only prompt for version when not using a regex, this case is not very common.
-  if (!usesRegex) {
+  if (guids.length == 1) {
     minVersion = await waitForInput("Minimum version [0]:") || "0";
     maxVersion = await waitForInput("Maximum version [*]:") || "*";
   }
 
-  let answer = await waitForInput("Ready to create and stage the blocklist entry? [yN]");
+  let answer = await waitForInput("Ready to create the blocklist entry? [yN]");
   if (answer == "y") {
-    await client.createBlocklistEntry(guids, bugid, name, reason, severity, minVersion, maxVersion);
+    if (!bugid) {
+      let versions = minVersion == "0" && maxVersion == "*" ? "<all versions>" : `${minVersion} - ${maxVersion}`;
+      let description = compileDescription(name, versions, reason, severity, guids, additionalInfo);
+      let account = await bugzilla.whoami();
+
+      bugid = await bugzilla.create({
+        product: "Toolkit",
+        component: "Blocklist Policy Requests",
+        version: "unspecified",
+        summary: "Extension block request: " + name,
+        description: description,
+        whiteboard: "[extension]",
+        status: "ASSIGNED",
+        assigned_to: account.name
+      });
+
+      console.log(`Created https://bugzilla.mozilla.org/show_bug.cgi?id=${bugid} for this entry`);
+    }
+
+    let guidstring = createGuidString(guids);
+    let entry = await client.createBlocklistEntry(guidstring, bugid, name, reason, severity, minVersion, maxVersion);
+    console.log(`\tDone, see ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.id}/attributes`);
   } else {
     console.log("In case you decide to do so later, here is the guid regex:");
-    console.log(guids);
+    console.log(createGuidString(guids));
+  }
+}
+
+function createGuidString(guids) {
+  if (guids.length > 1) {
+    return "/^((" + guids.map(regexEscape).join(")|(") + "))$/";
+  } else {
+    return guids[0];
   }
 }
 
@@ -551,7 +614,7 @@ async function printBlocklistStatus(client) {
 
     case "create":
     case "check":
-      await checkGuidsInteractively(client, {
+      await checkGuidsInteractively(client, bugzilla, {
         create: argv._[0] == "create",
         canContinue: !!argv["continue"],
         guids: argv.guids || [],

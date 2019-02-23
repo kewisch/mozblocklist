@@ -37,6 +37,32 @@ class BugzillaClient {
 
     return data;
   }
+
+  async create(info) {
+    let res = await fetch(`${this.baseurl}/rest/bug?api_key=${this.apikey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(info)
+    });
+
+    let data = await res.json();
+    if (data.error) {
+      throw new Error(`${data.code} - ${data.message}`);
+    }
+
+    return data.id;
+  }
+
+  async whoami() {
+    let res = await fetch(`${this.baseurl}/rest/whoami?api_key=${this.apikey}`);
+    let data = await res.json();
+
+    if (data.error) {
+      throw new Error(`${data.code} - ${data.message}`);
+    }
+
+    return data;
+  }
 }
 
 module.exports = BugzillaClient;
