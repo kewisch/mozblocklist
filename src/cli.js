@@ -71,7 +71,7 @@ function readGuidData(lines, guids, regexes) {
     }
   }
 
-  return [existing, newguids];
+  return { existing, newguids };
 }
 
 /**
@@ -107,10 +107,10 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
 
     console.warn("Applying blocklist entries to guids...");
 
-    let guiddata = readGuidData(data, blockguids, blockregexes);
+    let { existing } = readGuidData(data, blockguids, blockregexes);
     let all = "";
 
-    for (let [guid, entry] of guiddata[0].entries()) {
+    for (let [guid, entry] of existing.entries()) {
       let range = entry.versionRange[0];
       let multirange = entry.versionRange.length > 1 ? 1 : 0;
       console.log(
@@ -371,7 +371,7 @@ async function checkGuidsInteractively(client, bugzilla, { create = false, canCo
     data = result.query_result.data.rows.map(row => row.guid);
   }
 
-  let [existing, newguids] = readGuidData(data, blockguids, blockregexes);
+  let { existing, newguids } = readGuidData(data, blockguids, blockregexes);
   let newguidvalues = [...newguids.values()];
 
   console.warn("");
