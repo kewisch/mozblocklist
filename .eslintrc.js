@@ -5,11 +5,21 @@ module.exports = {
     "es6": true,
     "node": true
   },
+  "plugins": [
+    "jsdoc"
+  ],
   "parserOptions": {
     "ecmaVersion": 8
   },
   "globals": {
     "self": true
+  },
+  "settings": {
+    "jsdoc": {
+      "tagNamePreference": {
+        "returns": "return"
+      }
+    }
   },
   "rules": {
     // Enforce one true brace style (opening brace on the same line)
@@ -473,20 +483,19 @@ module.exports = {
     "no-else-return": 0,
 
     // We want jsdoc everywhere
-    "require-jsdoc": [2, { require: { ClassDeclaration: true } }],
-    "valid-jsdoc": [2, {
-        prefer: { returns: "return" },
-        preferType: {
-            "boolean": "Boolean",
-            "string": "String",
-            "number": "Number",
-            "object": "Object",
-            "function": "Function",
-            "map": "Map",
-            "set": "Set",
-            "date": "Date",
-        },
-        requireReturn: false
-    }],
+    "jsdoc/check-param-names": 1,
+    "jsdoc/check-tag-names": 1,
+    "jsdoc/check-types": 1,
+    "jsdoc/newline-after-description": 1,
+    "jsdoc/require-description-complete-sentence": 1,
+    "jsdoc/require-param": 1,
+    "jsdoc/require-param-description": 1,
+    "jsdoc/require-param-name": 1,
+    "jsdoc/require-param-type": 1,
+    "jsdoc/require-returns": 1,
+    "jsdoc/require-returns-check": 1,
+    "jsdoc/require-returns-description": 1,
+    "jsdoc/require-returns-type": 1,
+    "jsdoc/valid-types": 1
   }
 };

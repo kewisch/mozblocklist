@@ -18,7 +18,7 @@ var constants = require("./constants");
 
 /**
  * A map between a string guid and its blocklist data
- * @typedef {Map<String,Object>} BlocklistMap
+ * @typedef {Map<string,Object>} BlocklistMap
  */
 
 /**
@@ -26,15 +26,24 @@ var constants = require("./constants");
  * @typedef {Map<RegExp,Object>} BlocklistRegexMap
  */
 
+
 /**
- * Reads guids from an array of lines, skipping empty lines or those commented with #
+ * Existing and new guids object.
  *
- * @param {Array} lines                 The lines to parse
+ * @typedef {Object} GuidData
+ * @property {BlocklistMap} existing        The existing guids.
+ * @property {Set<string>} newguids         The new guids.
+ */
+
+/**
+ * Reads guids from an array of lines, skipping empty lines or those commented with #.
+ *
+ * @param {Array} lines                 The lines to parse.
  * @param {BlocklistMap} guids          The Map with guids and blocklist entry as
- *                                        provided by loadBlocklist
+ *                                        provided by loadBlocklist.
  * @param {BlocklistRegexMap} regexes   The Map with regexes and blocklist entry as
- *                                        provided by loadBlocklist
- * @return {[BlocklistMap, Set<String>]} An array with existing and new guids
+ *                                        provided by loadBlocklist.
+ * @return {GuidData}                   An array with existing and new guids.
  */
 function readGuidData(lines, guids, regexes) {
   let existing = new Map();
@@ -68,9 +77,9 @@ function readGuidData(lines, guids, regexes) {
 /**
  * Display the blocklist in various formats.
  *
- * @param {BlocklistKintoClient} client       The kinto client to access the blocklist
- * @param {String} format                     The format, json or sql.
- * @param {Boolean} loadAllGuids              For the SQL format, load guids from the AMO database
+ * @param {BlocklistKintoClient} client       The kinto client to access the blocklist.
+ * @param {string} format                     The format, json or sql.
+ * @param {boolean} loadAllGuids              For the SQL format, load guids from the AMO database
  *                                              instead of stdin.
  */
 async function displayBlocklist(client, format="json", loadAllGuids=false) {
@@ -120,10 +129,10 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
 /**
  * Send work in progress blocks to review.
  *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
- * @param {String} reviewerName               The reviewer's name (e.g. first name)
- * @param {String} reviewerEmail              The reviewer's email.
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
+ * @param {string} reviewerName               The reviewer's name (e.g. First name).
+ * @param {string} reviewerEmail              The reviewer's email.
  */
 async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
   let pending = await displayPending(client, bugzilla, "staging");
@@ -156,8 +165,8 @@ async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
 /**
  * Show blocks in the preview list and then sign after asking.
  *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
  */
 async function reviewAndSignBlocklist(client, bugzilla) {
   let pending = await displayPending(client, bugzilla);
@@ -170,8 +179,8 @@ async function reviewAndSignBlocklist(client, bugzilla) {
 /**
  * Sign the blocklist, pushing the block.
  *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
  * @param {?Object} pending                   The pending blocklist data in case it was retrieved
  *                                              before.
  */
@@ -206,9 +215,9 @@ async function signBlocklist(client, bugzilla, pending=null) {
 /**
  * Get bugzilla comments since a certain date.
  *
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
- * @param {Object<Number,Date>} data          Map between bug id and date
- * @return {Promise<Object<Number,String[]>>} Map between bug id and comments
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
+ * @param {Object<number,Date>} data          Map between bug id and date.
+ * @return {Promise<Object<number,string[]>>} Map between bug id and comments.
  */
 async function getCommentsSince(bugzilla, data) {
   let res = await bugzilla.getComments(Object.keys(data));
@@ -227,10 +236,10 @@ async function getCommentsSince(bugzilla, data) {
 }
 
 /**
- * Get the severity string based on the constant
+ * Get the severity string based on the constant.
  *
- * @param {Number} severity     The severity constant
- * @return {String}             The severity string
+ * @param {number} severity     The severity constant.
+ * @return {string}             The severity string.
  */
 function getSeverity(severity) {
   let map = { 1: "soft", 3: "hard" };
@@ -240,10 +249,11 @@ function getSeverity(severity) {
 /**
  * Display pending blocks.
  *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
- * @param {String} compareWith                The collection to compare with. This is usually
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
+ * @param {string} compareWith                The collection to compare with. This is usually
  *                                              blocklists-preview or staging.
+ * @return {Object}                          Pending blocklist data from kinto.
  */
 async function displayPending(client, bugzilla, compareWith="blocklists-preview") {
   let pending = await client.compareAddonCollection(compareWith);
@@ -309,10 +319,10 @@ async function displayPending(client, bugzilla, compareWith="blocklists-preview"
 }
 
 /**
- * Get SQL data from redash
+ * Get SQL data from redash.
  *
- * @param {String} sql          The SQL to query
- * @return {Promise<Object>}    The redash response
+ * @param {string} sql          The SQL to query.
+ * @return {Promise<Object>}    The redash response.
  */
 async function redashSQL(sql) {
   let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
@@ -334,13 +344,13 @@ async function redashSQL(sql) {
 
 /**
  * Check for guids provided in stdin if they are in the blocklist, optionally creating the blocklist
- * entry. This will start the interactive workflow
+ * entry. This will start the interactive workflow.
  *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
- * @param {Object} options                    The options for this call, see following
- * @param {Boolean} options.create              If true, creation will also be prompted
- * @param {Boolean} options.canContinue         Also create the entry if there are work in progress items
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
+ * @param {Object} options                    The options for this call, see following.
+ * @param {boolean} options.create              If true, creation will also be prompted.
+ * @param {boolean} options.canContinue         Also create the entry if there are work in progress items.
  */
 async function checkGuidsInteractively(client, bugzilla, { create = false, canContinue = false, guids = [], useIds = false }) {
   if (process.stdin.isTTY && !guids.length) {
@@ -393,33 +403,33 @@ async function checkGuidsInteractively(client, bugzilla, { create = false, canCo
 }
 
 /**
- * Create the markdown description for new blocklisting bugs
+ * Create the markdown description for new blocklisting bugs.
  *
- * @param {String} name                 The extension name.
- * @param {String} versions             The version range(s).
- * @param {String} reason               The reason to block.
- * @param {Number} severity             The blocklist severity constant.
- * @param {String[]} guids              An array of guids to block.
- * @param {?String} additionalInfo      Additional information for the bug.
- * @param {?String} platformVersions    The platform version range.
- * @return {String}                     The markdown description.
+ * @param {string} name                 The extension name.
+ * @param {string} versions             The version range(s).
+ * @param {string} reason               The reason to block.
+ * @param {number} severity             The blocklist severity constant.
+ * @param {string[]} guids              An array of guids to block.
+ * @param {?string} additionalInfo      Additional information for the bug.
+ * @param {?string} platformVersions    The platform version range.
+ * @return {string}                     The markdown description.
  */
 function compileDescription(name, versions, reason, severity, guids, additionalInfo=null, platformVersions="<all platforms>") {
   /**
    * Removes backticks from the start of each line for use in a backticked string.
    *
-   * @param {String} str    Input string
-   * @return {String}       The removed backtick string
+   * @param {string} str    Input string.
+   * @return {string}       The removed backtick string.
    */
   function backtick(str) {
     return str.replace(/^\s*```/mg, "").trim();
   }
 
   /**
-   * Replaces links in the string with hxxp:// links, except for AMO links
+   * Replaces links in the string with hxxp:// links, except for AMO links.
    *
-   * @param {String} str    Input string
-   * @return {String}       The sanitized string
+   * @param {string} str    Input string.
+   * @return {string}       The sanitized string.
    */
   function unlink(str) {
     return str.replace(/http(s?):\/\/(?!(reviewers\.)?addons.mozilla.org)/g, "hxxp$1://");
@@ -429,8 +439,8 @@ function compileDescription(name, versions, reason, severity, guids, additionalI
    * Create a markdown table with an empty header based on the array. The array is an array of rows.
    * Each row is an array of columns.
    *
-   * @param {Array<String[]>} arr        Array of cells
-   * @return {String}                    The markdown table
+   * @param {Array<string[]>} arr        Array of cells.
+   * @return {string}                    The markdown table.
    */
   function table(arr) {
     function escapeTable(str) { // eslint-disable-line require-jsdoc
@@ -460,12 +470,12 @@ function compileDescription(name, versions, reason, severity, guids, additionalI
 
 /**
  * Prompt for information required to create a blocklist entry and create it. This requires the
- * blocklist to be clean and not work in progress
+ * blocklist to be clean and not work in progress.
  *
- * @param {BlocklistKintoClient} client       The blocklist client to create with
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs
- * @param {String[]} guids                The guid strings for the blocklist entry
- * @param {Boolean} canContinue         Also create the entry if there are work in progress items
+ * @param {BlocklistKintoClient} client   The blocklist client to create with.
+ * @param {BugzillaClient} bugzilla       The bugzilla client to file and update bugs.
+ * @param {string[]} guids                The guid strings for the blocklist entry.
+ * @param {boolean} canContinue           Also create the entry if there are work in progress items.
  */
 async function createBlocklistEntryInteractively(client, bugzilla, guids, canContinue=false) {
   let requestedStates = ["signed"];
@@ -550,10 +560,10 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
 }
 
 /**
- * Create the kinto guid string, so string with regex or a simple uuid
+ * Create the kinto guid string, so string with regex or a simple uuid.
  *
- * @param {String[]} guids      The array of guids
- * @return {String}             The compiled guid string
+ * @param {string[]} guids      The array of guids.
+ * @return {string}             The compiled guid string.
  */
 function createGuidString(guids) {
   if (guids.length > 1) {
@@ -564,9 +574,9 @@ function createGuidString(guids) {
 }
 
 /**
- * Print the current blocklist status in a human readable form
+ * Print the current blocklist status in a human readable form.
  *
- * @param {BlocklistKintoClient} client       The blocklist client
+ * @param {BlocklistKintoClient} client       The blocklist client.
  */
 async function printBlocklistStatus(client) {
   let status = await client.getBlocklistStatus();
@@ -583,16 +593,16 @@ async function printBlocklistStatus(client) {
 }
 
 /**
- * The main program executed when called
+ * The main program executed when called.
  */
 (async function() {
   process.stdin.setEncoding("utf8");
 
   /**
-   * yargs handler function for the check and create commands. The type argument should be bound.
+   * The yargs handler function for the check and create commands. The type argument should be bound.
    *
-   * @param {String} type       The type of command (check/create)
-   * @param {Object} subyargs   The yargs object
+   * @param {string} type       The type of command (check/create).
+   * @param {Object} subyargs   The yargs object.
    */
   function checkCreateCommand(type, subyargs) {
     subyargs.positional("guids", {

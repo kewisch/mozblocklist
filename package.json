@@ -1,6 +1,6 @@
 {
   "name": "mozblocklist",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Find and add add-ons to the Mozilla blocklist",
   "main": "src/cli.js",
   "dependencies": {
@@ -11,7 +11,10 @@
     "redash-client": "^2.0.0",
     "yargs": "^12.0.5"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "eslint": "^5.14.1",
+    "eslint-plugin-jsdoc": "^4.1.1"
+  },
   "author": "Philipp Kewisch",
   "license": "MPL-2.0",
   "bin": "src/cli.js"
