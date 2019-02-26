@@ -10,6 +10,7 @@ var ini = require("ini");
 var fs = require("fs");
 var os = require("os");
 var path = require("path");
+var packageJSON = require("../package.json");
 
 var BlocklistKintoClient = require("./kinto-client");
 var BugzillaClient = require("./bugzilla");
@@ -329,8 +330,10 @@ async function redashSQL(sql) {
   if (config && config.auth && config.auth.redash_key) {
     let redash = new RedashClient({
       endPoint: constants.REDASH_URL,
-      apiToken: config.auth.redash_key
+      apiToken: config.auth.redash_key,
+      agent: `${packageJSON.name}/${packageJSON.version}`
     });
+
     let result = await redash.queryAndWaitResult({
       query: sql,
       data_source_id: constants.REDASH_AMO_DB
