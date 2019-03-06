@@ -4,6 +4,7 @@
  * Portions Copyright (C) Philipp Kewisch, 2018 */
 
 var readline = require("readline");
+var fs = require("fs");
 
 /**
  * Escape a string for use in the RegExp constructor.
@@ -35,19 +36,31 @@ function waitForStdin() {
 /**
  * Wait for input on a question on stdin. The input will be trimmed.
  *
- * @param {String} prompt       The prompt to show
- * @param {Boolean} lowercase   If the result should be made lowercase
- * @return {Promise<String>}    The string result with the answer
+ * @param {String} prompt               The prompt to show.
+ * @param {Boolean} [lowercase=true]    If the result should be made lowercase.
+ * @param {Boolean} [realStdin=true]    Input from the terminal, not the pipe connected to stdin.
+ * @return {Promise<String>}            The string result with the answer
  */
-function waitForInput(prompt, lowercase=true) {
-  return new Promise((resolve) => {
+function waitForInput(prompt, lowercase=true, realStdin=true) {
+  return new Promise((resolve, reject) => {
+    let stdin = realStdin && !process.stdin.isTTY ? fs.createReadStream("/dev/tty") : process.stdin;
+
+    if (realStdin && !process.stdin.isTTY && process.platform == "win32") {
+      reject("Windows doesn't support /dev/tty, please don't use pipes for this operation");
+      return;
+    }
+
     let rli = readline.createInterface({
-      input: process.stdin,
+      input: stdin,
       output: process.stdout
     });
 
     rli.question(prompt, (answer) => {
       rli.close();
+      if (realStdin && !process.stdin.isTTY) {
+        stdin.close();
+      }
+
       if (lowercase) {
         answer = answer.toLowerCase();
       }
