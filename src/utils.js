@@ -9,17 +9,17 @@ var fs = require("fs");
 /**
  * Escape a string for use in the RegExp constructor.
  *
- * @param {String} str      The string to escape
- * @return {String}         The escaped string
+ * @param {string} str      The string to escape.
+ * @return {string}         The escaped string.
  */
 function regexEscape(str) {
   return str.replace(/[\\$^*+.?(){}|[\]]/g, "\\$&");
 }
 
 /**
- * Wait for input from stdin until Ctrl+D
+ * Wait for input from stdin until Ctrl+D.
  *
- * @return {Promise<String[]>}      An array with the lines from stdin
+ * @return {Promise<string[]>}      An array with the lines from stdin.
  */
 function waitForStdin() {
   return new Promise((resolve) => {
@@ -36,10 +36,10 @@ function waitForStdin() {
 /**
  * Wait for input on a question on stdin. The input will be trimmed.
  *
- * @param {String} prompt               The prompt to show.
- * @param {Boolean} [lowercase=true]    If the result should be made lowercase.
- * @param {Boolean} [realStdin=true]    Input from the terminal, not the pipe connected to stdin.
- * @return {Promise<String>}            The string result with the answer
+ * @param {string} prompt               The prompt to show.
+ * @param {boolean} [lowercase=true]    If the result should be made lowercase.
+ * @param {boolean} [realStdin=true]    Input from the terminal, not the pipe connected to stdin.
+ * @return {Promise<string>}            The string result with the answer.
  */
 function waitForInput(prompt, lowercase=true, realStdin=true) {
   return new Promise((resolve, reject) => {
@@ -70,10 +70,10 @@ function waitForInput(prompt, lowercase=true, realStdin=true) {
 }
 
 /**
- * Make the text bold for output on the terminal
+ * Make the text bold for output on the terminal.
  *
- * @param {String} text     The string to make bold
- * @return {String}         The bold text
+ * @param {string} text     The string to make bold.
+ * @return {string}         The bold text.
  */
 function bold(text) {
   return `\x1b[1m${text}\x1b[0m`;
