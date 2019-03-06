@@ -555,7 +555,7 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
 
     let guidstring = createGuidString(guids);
     let entry = await client.createBlocklistEntry(guidstring, bugid, name, reason, severity, minVersion, maxVersion);
-    console.log(`\tDone, see ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.id}/attributes`);
+    console.log(`\tDone, see ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
   } else {
     console.log("In case you decide to do so later, here is the guid regex:");
     console.log(createGuidString(guids));
