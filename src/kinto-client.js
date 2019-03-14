@@ -60,7 +60,7 @@ class BlocklistKintoClient extends KintoClient {
 
     // Open the URL in the browser to trigger authentication
     let authURL = new url.URL("/v1/openid/ldap/login?" + querystring.stringify({
-      callback: `http://127.0.0.1:${port}/?token=`,
+      callback: `http://127.0.0.1:${port}/mozblocklist?token=`,
       scope: "openid email"
     }), this.remote);
     open(authURL);
