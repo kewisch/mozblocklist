@@ -1,6 +1,6 @@
 {
   "name": "mozblocklist",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "description": "Find and add add-ons to the Mozilla blocklist",
   "main": "src/cli.js",
   "dependencies": {
