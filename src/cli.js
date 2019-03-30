@@ -137,7 +137,7 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
  */
 async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
   let pending = await displayPending(client, bugzilla, "staging");
-  let answer = await waitForInput("Ready to review? [yN] ");
+  let answer = await waitForInput(`Ready to request review from ${reviewerName}? [yN]`);
   if (answer == "y") {
     await client.reviewBlocklist();
 
