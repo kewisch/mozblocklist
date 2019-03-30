@@ -483,7 +483,7 @@ function compileDescription(name, versions, reason, severity, guids, additionalI
 async function createBlocklistEntryInteractively(client, bugzilla, guids, canContinue=false) {
   let requestedStates = ["signed"];
   if (canContinue) {
-    requestedStates.push("work-in-progress");
+    requestedStates.push("work-in-progress", "to-review");
   }
   await client.ensureBlocklistState(requestedStates);
 
