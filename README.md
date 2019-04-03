@@ -61,6 +61,12 @@ will be ignored. You need to have access to the settings writer for this.
 cat baddons | mozblocklist create
 ```
 
+Create a blocklist entry for the guids from the given bug. The bug must be using the new blocklist
+bug form. Values from the from will be suggested and can be modified if needed.
+```
+mozblocklist create -B 1540287
+```
+
 Just check if the add-ons are already in the blocklist. Instead of reading from a file, the guids
 will be prompted for. This uses the public blocklist host by default. It will also take guids from
 stdin like in the example above, if you prefer.

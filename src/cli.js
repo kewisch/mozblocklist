@@ -27,6 +27,16 @@ var constants = require("./constants");
  * @typedef {Map<RegExp,Object>} BlocklistRegexMap
  */
 
+/**
+ * Blocklist bug data.
+ *
+ * @typedef {Object} BlocklistBugData
+ * @property {integer} id                   The bug id
+ * @property {string} name                  The extension name, from the block
+ * @proeprty {string} reason                The first line of the reason field
+ * @property {string[]} guids               The array of guids to block
+ */
+
 
 /**
  * Existing and new guids object.
@@ -354,19 +364,31 @@ async function redashSQL(sql) {
  * @param {Object} options                    The options for this call, see following.
  * @param {boolean} options.create              If true, creation will also be prompted.
  * @param {boolean} options.canContinue         Also create the entry if there are work in progress items.
+ * @param {string[]} options.guids              The guids to check, can be empty.
+ * @param {boolean} options.useIds              If add-on ids are used instead.
+ * @param {integer} options.bug                 The bug to optionally take information from.
  */
-async function checkGuidsInteractively(client, bugzilla, { create = false, canContinue = false, guids = [], useIds = false }) {
-  if (process.stdin.isTTY && !guids.length) {
+async function checkGuidsInteractively(client, bugzilla, { create = false, canContinue = false, guids = [], useIds = false, bug = null }) {
+  if (process.stdin.isTTY && !guids.length && !bug) {
     console.warn("Loading blocklist...");
   }
 
   let [blockguids, blockregexes] = await client.loadBlocklist();
 
-  if (process.stdin.isTTY && !guids.length) {
+  if (process.stdin.isTTY && !guids.length && !bug) {
     console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
   }
 
-  let data = guids.length ? guids : await waitForStdin();
+  let data;
+  let bugData;
+  if (bug) {
+    bugData = await parseBlocklistBug(bugzilla, bug);
+    data = bugData.guids;
+  } else if (guids.length) {
+    data = guids;
+  } else {
+    data = await waitForStdin();
+  }
 
   if (useIds) {
     console.warn("Querying guids from AMO-DB via redash");
@@ -394,7 +416,7 @@ async function checkGuidsInteractively(client, bugzilla, { create = false, canCo
     console.log(newguidvalues.join("\n"));
 
     if (create) {
-      await createBlocklistEntryInteractively(client, bugzilla, newguidvalues, canContinue);
+      await createBlocklistEntryInteractively(client, bugzilla, newguidvalues, canContinue, bugData);
     } else {
       console.log("");
       console.log(bold("Here is the list of guids for kinto:"));
@@ -472,6 +494,35 @@ function compileDescription(name, versions, reason, severity, guids, additionalI
 }
 
 /**
+ * Parse a blocklist bug that uses the form.
+ *
+ * @param {BugzillaClient} bugzilla       The bugzilla client for retrieving comments.
+ * @param {integer} id                    The bug id.
+ * @return {Promise<BlocklistBugData>}    The parsed blocklist data.
+ */
+async function parseBlocklistBug(bugzilla, id) {
+  let data = await bugzilla.getComments([id]);
+  let text = data.bugs[id].comments[0].text;
+
+  let matches = text.match(/Extension name\|([^|]*)\|/);
+  let name = matches && matches[1].trim();
+
+  matches = text.match(/### Extension (GU)?IDs\n```([\s\S]+)\n```/);
+  let guids = matches && matches[2].trim().split("\n");
+
+
+  matches = text.match(/### Reason\n([^#]+)/);
+  let reason = matches && matches[1].trim().split("\n")[0];
+
+  if (!name || !reason || !guids) {
+    console.warn("Not a blocklist bug using the form");
+    return null;
+  }
+
+  return { id, name, reason, guids };
+}
+
+/**
  * Prompt for information required to create a blocklist entry and create it. This requires the
  * blocklist to be clean and not work in progress.
  *
@@ -479,35 +530,47 @@ function compileDescription(name, versions, reason, severity, guids, additionalI
  * @param {BugzillaClient} bugzilla       The bugzilla client to file and update bugs.
  * @param {string[]} guids                The guid strings for the blocklist entry.
  * @param {boolean} canContinue           Also create the entry if there are work in progress items.
+ * @param {BlocklistBugData} bugData      The data from the blocklist bug for names and reasons.
  */
-async function createBlocklistEntryInteractively(client, bugzilla, guids, canContinue=false) {
+async function createBlocklistEntryInteractively(client, bugzilla, guids, canContinue=false, bugData=null) {
   let requestedStates = ["signed"];
   if (canContinue) {
     requestedStates.push("work-in-progress", "to-review");
   }
   await client.ensureBlocklistState(requestedStates);
 
-  let bugid;
+  let bugid, name, reason;
   let additionalInfo = null;
-  while (true) {
-    bugid = await waitForInput("Bug id or link (leave empty to create):");
-    bugid = bugid.replace("https://bugzilla.mozilla.org/show_bug.cgi?id=", "");
-    if (!bugid && !bugzilla.authenticated) {
-      console.log("You need to specify a bugzilla API key in the config or enter a bug id here");
-    } else if (bugid && isNaN(parseInt(bugid, 10))) {
-      console.log("Invalid bug id or link");
-    } else {
-      break;
+
+  if (bugData) {
+    bugid = bugData.id;
+  } else {
+    while (true) {
+      bugid = await waitForInput("Bug id or link (leave empty to create):");
+      bugid = bugid.replace("https://bugzilla.mozilla.org/show_bug.cgi?id=", "");
+
+      if (!bugid && !bugzilla.authenticated) {
+        console.log("You need to specify a bugzilla API key in the config or enter a bug id here");
+      } else if (bugid && isNaN(parseInt(bugid, 10))) {
+        console.log("Invalid bug id or link");
+      } else {
+        break;
+      }
+    }
+
+    if (bugid) {
+      bugData = await parseBlocklistBug(bugzilla, bugid);
     }
   }
 
-  if (!bugid) {
+  if (bugData) {
+    name = await waitForInput(`Name for this block [${bugData.name}]:`, false) || bugData.name;
+    reason = await waitForInput(`Reason for this block [${bugData.reason}]:`, false) || bugData.reason;
+  } else {
+    name = await waitForInput("Name for this block:", false);
+    reason = await waitForInput("Reason for this block:", false);
     additionalInfo = await waitForInput("Any additional info for the bug?", false);
   }
-
-
-  let name = await waitForInput("Name for this block:", false);
-  let reason = await waitForInput("Reason for this block:", false);
 
   let severity;
   while (true) {
@@ -622,6 +685,11 @@ async function printBlocklistStatus(client) {
         "alias": "continue",
         "boolean": true,
         "describe": "Allow creation when there are work in progress items"
+      })
+      .option("B", {
+        alias: "bug",
+        conflicts: "ids",
+        describe: type + " blocks from given bug"
       });
   }
 
@@ -735,7 +803,8 @@ async function printBlocklistStatus(client) {
         create: argv._[0] == "create",
         canContinue: !!argv["continue"],
         guids: argv.guids || [],
-        useIds: argv.ids
+        useIds: argv.ids,
+        bug: argv.bug
       });
       break;
 
