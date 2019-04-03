@@ -55,7 +55,7 @@ function waitForInput(prompt, lowercase=true, realStdin=true) {
       output: process.stdout
     });
 
-    rli.question(prompt, (answer) => {
+    rli.question(prompt + " ", (answer) => {
       rli.close();
       if (realStdin && !process.stdin.isTTY) {
         stdin.close();
