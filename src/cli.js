@@ -152,7 +152,13 @@ async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
     await client.reviewBlocklist();
 
     if (bugzilla.authenticated && reviewerName && reviewerEmail) {
-      let bugs = pending.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
+      let bugs = pending.data
+        .filter(entry => !entry._alreadyRequestedBlock)
+        .map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
+
+      if (bugs.length < pending.data.length) {
+        console.warn(`${pending.data.length - bugs.length} bugs already have a request for review`);
+      }
       console.warn(`Requesting review from ${reviewerName} for bugs ${bugs.join(",")}...`);
 
       await bugzilla.update({
@@ -318,6 +324,9 @@ async function displayPending(client, bugzilla, compareWith="blocklists-preview"
       console.log("\tComments since the block was staged:");
       for (let comment of comments[bugId]) {
         console.log("\t\t" + comment.replace(/\n/g, "\n\t\t\t"));
+        if (comment.includes("The block has been staged")) {
+          entry._alreadyRequestedBlock = true;
+        }
       }
     }
   }
