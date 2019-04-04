@@ -171,8 +171,8 @@ async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
         }]
       });
     } else {
-      let bugurls = res.data.map(entry => entry.details.bug);
-      console.warn("You don't have a bugzilla API key or reviewer configured. Set one in ~/.amorc" +
+      let bugurls = pending.data.map(entry => entry.details.bug);
+      console.warn("You don't have a bugzilla API key or reviewers configured. Set one in ~/.amorc" +
                    " or visit these bugs manually:");
       console.warn("\t" + bugurls.join("\n\t"));
     }
