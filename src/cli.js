@@ -663,7 +663,7 @@ async function printBlocklistStatus(client) {
     "_": "Unknown: %s"
   };
 
-  let string = (map[status] || map._).replace("%s", stautus);
+  let string = (map[status] || map._).replace("%s", status);
   console.log(string);
 }
 
@@ -822,7 +822,7 @@ async function printBlocklistStatus(client) {
       break;
 
     case "status":
-      await printBlocklistStatus();
+      await printBlocklistStatus(client);
       break;
     case "review":
       await reviewBlocklist(client, bugzilla, argv.reviewer[0], argv.reviewer[1]);

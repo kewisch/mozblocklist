@@ -185,12 +185,22 @@ class BlocklistKintoClient extends KintoClient {
    * @param {string[]} statii       An array with requested states.
    */
   async ensureBlocklistState(statii) {
+    let status = await this.getBlocklistStatus();
+
+    if (!statii.includes(status)) {
+      throw new Error(`Expected blocklist to be in states ${statii.join(",")}, but was in ${status}`);
+    }
+  }
+
+  /**
+   * Get the current blocklist status.
+   *
+   * @return {string}               The current blocklist status.
+   */
+  async getBlocklistStatus() {
     await this.ensureAuthorized();
     let data = await this.bucket("staging").collection("addons").getData();
-
-    if (!statii.includes(data.status)) {
-      throw new Error(`Expected blocklist to be in states ${statii.join(",")}, but was in ${data.status}`);
-    }
+    return data.status;
   }
 
   /**
