@@ -147,11 +147,18 @@ async function displayBlocklist(client, format="json", loadAllGuids=false) {
  */
 async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
   let pending = await displayPending(client, bugzilla, "staging");
-  let answer = await waitForInput(`Ready to request review from ${reviewerName}? [yN]`);
+  let hasReviewer = bugzilla.authenticated && reviewerName && reviewerEmail;
+  let answer;
+  if (hasReviewer) {
+    answer = await waitForInput(`Ready to request review from ${reviewerName}? [yN]`);
+  } else {
+    answer = await waitForInput("Ready to request review? [yN]");
+  }
+
   if (answer == "y") {
     await client.reviewBlocklist();
 
-    if (bugzilla.authenticated && reviewerName && reviewerEmail) {
+    if (hasReviewer) {
       let bugs = pending.data
         .filter(entry => !entry._alreadyRequestedBlock)
         .map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
