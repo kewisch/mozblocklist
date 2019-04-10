@@ -162,6 +162,7 @@ async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
       let bugs = pending.data
         .filter(entry => !entry._alreadyRequestedBlock)
         .map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
+      bugs = [...new Set(bugs).values()];
 
       if (bugs.length < pending.data.length) {
         console.warn(`${pending.data.length - bugs.length} bugs already have a request for review`);
@@ -214,7 +215,7 @@ async function signBlocklist(client, bugzilla, pending=null) {
   await client.signBlocklist();
 
   if (bugzilla.authenticated) {
-    let bugs = res.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
+    let bugs = [...new Set(res.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1])).values()];
     console.warn(`Marking bugs ${bugs.join(",")} as FIXED...`);
 
     await bugzilla.update({
