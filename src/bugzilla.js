@@ -22,7 +22,13 @@ class BugzillaClient {
 
   async getComments(ids) {
     let firstid = ids[0];
-    return fetch(`${this.baseurl}/rest/bug/${firstid}/comment?ids=${ids.join("&ids=")}`).then(resp => resp.json());
+    let data = fetch(`${this.baseurl}/rest/bug/${firstid}/comment?ids=${ids.join("&ids=")}&api_key=${this.apikey}`).then(resp => resp.json());
+
+    if (data.error) {
+      throw new Error(`${data.code} - ${data.message}`);
+    }
+
+    return data;
   }
 
   async update(info) {
