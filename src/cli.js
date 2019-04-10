@@ -272,6 +272,29 @@ function getSeverity(severity) {
 }
 
 /**
+ * Display guids pending for blocklisting.
+ *
+ * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
+ * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
+ * @param {string} compareWith                The collection to compare with. This is usually
+ *                                              blocklists-preview or staging.
+ */
+async function displayPendingGuids(client, bugzilla, compareWith="blocklists-preview") {
+  let pending = await client.compareAddonCollection(compareWith);
+
+  let output = pending.data.reduce((guids, { guid }) => {
+    if (guid.startsWith("/")) {
+      guids.push(...guid.substring(4, guid.length - 4).split(")|(").map(entry => entry.replace(/\\/g, "")));
+    } else {
+      guids.push(guid);
+    }
+    return guids;
+  }, []);
+
+  console.log(output.join("\n"));
+}
+
+/**
  * Display pending blocks.
  *
  * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
@@ -784,7 +807,12 @@ async function printBlocklistStatus(client) {
         "alias": "wip",
         "boolean": true,
         "describe": "Show work in progress items instead of those pending review"
-      });
+      })
+        .option("g", {
+          "alias": "guids",
+          "boolean": true,
+          "describe": "Show pending guids instead of the full block"
+        });
     })
     .command("sign", "Sign pending blocklist entries after verification")
     .command("reject", "Reject a pending blocklist review")
@@ -826,7 +854,11 @@ async function printBlocklistStatus(client) {
       break;
 
     case "pending":
-      await displayPending(client, bugzilla, argv.wip ? "staging" : "blocklists-preview");
+      if (argv.guids) {
+        await displayPendingGuids(client, bugzilla, argv.wip ? "staging" : "blocklists-preview");
+      } else {
+        await displayPending(client, bugzilla, argv.wip ? "staging" : "blocklists-preview");
+      }
       break;
 
     case "status":
