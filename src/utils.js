@@ -38,17 +38,18 @@ function waitForStdin() {
  *
  * @param {string} prompt               The prompt to show.
  * @param {boolean} [lowercase=true]    If the result should be made lowercase.
- * @param {boolean} [realStdin=true]    Input from the terminal, not the pipe connected to stdin.
  * @return {Promise<string>}            The string result with the answer.
  */
-function waitForInput(prompt, lowercase=true, realStdin=true) {
+function waitForInput(prompt, lowercase=true) {
   return new Promise((resolve, reject) => {
-    let stdin = realStdin && !process.stdin.isTTY ? fs.createReadStream("/dev/tty") : process.stdin;
-
-    if (realStdin && !process.stdin.isTTY && process.platform == "win32") {
-      reject("Windows doesn't support /dev/tty, please don't use pipes for this operation");
+    if (process.platform == "win32") {
+      // win32 does not have /dev/tty. We need to find an alternative way to read from the terminal
+      // regardless of what stdin is connected to.
+      reject("Temporarily, win32 is not supported. You're going to have to fix this on your own :)");
       return;
     }
+
+    let stdin = fs.createReadStream("/dev/tty");
 
     let rli = readline.createInterface({
       input: stdin,
@@ -57,9 +58,7 @@ function waitForInput(prompt, lowercase=true, realStdin=true) {
 
     rli.question(prompt + " ", (answer) => {
       rli.close();
-      if (realStdin && !process.stdin.isTTY) {
-        stdin.close();
-      }
+      stdin.close();
 
       if (lowercase) {
         answer = answer.toLowerCase();
