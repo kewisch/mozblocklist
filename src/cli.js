@@ -878,6 +878,6 @@ async function printBlocklistStatus(client) {
       break;
   }
 })().catch((e) => {
-  console.error("Error:", e.message);
+  console.error(e);
   process.exit(1);
 });
