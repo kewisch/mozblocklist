@@ -221,6 +221,9 @@ async function signBlocklist(client, bugzilla, pending=null) {
     await bugzilla.update({
       ids: bugs,
       comment: { body: "Done" },
+      groups: {
+        remove: ["blocklist-requests"]
+      },
       flags: [{
         name: "needinfo",
         status: "X"
