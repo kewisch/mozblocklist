@@ -195,8 +195,8 @@ async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
  */
 async function reviewAndSignBlocklist(client, bugzilla) {
   let pending = await displayPending(client, bugzilla);
-  let answer = await waitForInput("Ready to sign? [yN] ");
-  if (answer == "y") {
+  let ready = await waitForInput("Ready to sign? [yN] ");
+  if (ready == "y") {
     await signBlocklist(client, bugzilla, pending);
   }
 }
@@ -210,27 +210,38 @@ async function reviewAndSignBlocklist(client, bugzilla) {
  *                                              before.
  */
 async function signBlocklist(client, bugzilla, pending=null) {
+  let removeSecurityGroup = false;
+  if (bugzilla.authenticated) {
+    removeSecurityGroup = await waitForInput("Remove blocklist-requests security group? [yN]");
+  }
+
   console.warn("Signing blocklist...");
   let res = pending || await client.getBlocklistPreview();
   await client.signBlocklist();
 
   if (bugzilla.authenticated) {
     let bugs = [...new Set(res.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1])).values()];
-    console.warn(`Marking bugs ${bugs.join(",")} as FIXED...`);
+    console.warn("Marking the following bugs as FIXED:");
+    for (let bug of bugs) {
+      console.warn("\thttps://bugzilla.mozilla.org/show_bug.cgi?id=" + bug);
+    }
 
-    await bugzilla.update({
+    let bugdata = {
       ids: bugs,
       comment: { body: "Done" },
-      groups: {
-        remove: ["blocklist-requests"]
-      },
       flags: [{
         name: "needinfo",
         status: "X"
       }],
       resolution: "FIXED",
       status: "RESOLVED"
-    });
+    };
+
+    if (removeSecurityGroup) {
+      bugdata.groups = { remove: ["blocklist-requests"] };
+    }
+    await bugzilla.update(bugdata);
+
     console.warn("Done");
   } else {
     let bugurls = res.data.map(entry => entry.details.bug);
@@ -653,7 +664,8 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
         description: description,
         whiteboard: "[extension]",
         status: "ASSIGNED",
-        assigned_to: account.name
+        assigned_to: account.name,
+        groups: ["blocklist-requests"]
       });
 
       console.log(`Created https://bugzilla.mozilla.org/show_bug.cgi?id=${bugid} for this entry`);
