@@ -6,15 +6,11 @@
 
 var yargs = require("yargs");
 var RedashClient = require("redash-client");
-var ini = require("ini");
-var fs = require("fs");
-var os = require("os");
-var path = require("path");
 var packageJSON = require("../package.json");
 
 var BlocklistKintoClient = require("./kinto-client");
 var BugzillaClient = require("./bugzilla");
-var { regexEscape, waitForStdin, waitForInput, bold } = require("./utils");
+var { regexEscape, waitForStdin, waitForInput, bold, getConfig, CaselessMap } = require("./utils");
 var constants = require("./constants");
 
 /**
@@ -390,7 +386,7 @@ async function displayPending(client, bugzilla, compareWith="blocklists-preview"
  * @return {Promise<Object>}    The redash response.
  */
 async function redashSQL(sql) {
-  let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
+  let config = getConfig();
   if (config && config.auth && config.auth.redash_key) {
     let redash = new RedashClient({
       endPoint: constants.REDASH_URL,
@@ -748,7 +744,7 @@ async function printBlocklistStatus(client) {
       });
   }
 
-  let config = ini.parse(fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8"));
+  let config = getConfig();
 
   let argv = yargs
     .option("H", {
@@ -797,10 +793,10 @@ async function printBlocklistStatus(client) {
         "default": [],
         "coerce": (reviewer) => {
           if (reviewer.length == 1) {
-            let caseMap = new Map(Object.keys(config.reviewers || {}).map(name => [name.toLowerCase(), name]));
-            let name = reviewer[0].toLowerCase();
-            if (caseMap.has(name)) {
-              reviewer = config.reviewers[caseMap.get(name)].split(",");
+            let caseMap = new CaselessMap(Object.entries(config.mozblocklist.reviewers || {}));
+            let reviewerData = caseMap.get(reviewer[0]);
+            if (reviewerData) {
+              return [reviewerData.name, reviewerData.email];
             } else {
               throw new Error("Error: Could not find reviewer alias " + reviewer[0]);
             }
@@ -836,7 +832,7 @@ async function printBlocklistStatus(client) {
     .example("echo 1285960 | $0 create -i", "The same, but also prompt for creating the blocklist entry")
     .example("$0 check", "Interactively enter a list of guids to check in the blocklist")
     .demandCommand(1, 1, "Error: Missing required command")
-    .config(config ? config.mozblocklist || {} : {})
+    .config((config && config.mozblocklist && config.mozblocklist.defaults) || {})
     .wrap(120)
     .argv;
 

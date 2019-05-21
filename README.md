@@ -28,17 +28,23 @@ be the same file that [pyamo](https://github.com/kewisch/pyamo) uses. You'll nee
 user api key (not the query key) and bugzilla api token in the `[auth]` section:
 
 ```
-[auth]
-redash_key=42c85d86fd212538f4394f47c80fa62c
-bugzilla_key=8342c234ff833e8842a492d482eb24
+{
+  "auth": {
+    "redash_key": "42c85d86fd212538f4394f47c80fa62c",
+    "bugzilla_key": "8342c234ff833e8842a492d482eb24"
+  }
+}
 ```
 
 For the `mozblocklist review` feature, you can also configure reviewer aliases as such:
 
 ```
-[reviewers]
-alias1=Name,email@example.com
-alias2=Other Name,email2@example.com
+{
+  "reviewers": {
+    "alias1": { "name": "Name", "email": "email@example.com" },
+    "alias2": { "name": "Other Name", "email": "email2@example.com" }
+  }
+}
 ```
 
 The name will be used in the bugzilla comment, so you will likely pick the reviewer's first name.
@@ -48,8 +54,11 @@ If you would like to set a default reviewer, you can do so in the mozblocklist s
 can also used to set other default arguments. The reviewer alias is case insensitive.
 
 ```
-[mozblocklist]
-reviewer=alias1
+{
+  "mozblocklist": {
+    "reviewer": "alias1"
+  }
+}
 ```
 
 Examples

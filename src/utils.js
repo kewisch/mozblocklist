@@ -5,6 +5,10 @@
 
 var readline = require("readline");
 var fs = require("fs");
+var os = require("os");
+var path = require("path");
+
+var gConfigData = null;
 
 /**
  * Escape a string for use in the RegExp constructor.
@@ -78,4 +82,60 @@ function bold(text) {
   return `\x1b[1m${text}\x1b[0m`;
 }
 
-module.exports = { regexEscape, waitForStdin, waitForInput, bold };
+/**
+ * Read the configuration file, which can either still be an ini file, or a JSON file.
+ *
+ * @return {Object}         The configuration object.
+ */
+function readConfig() {
+  let data;
+  try {
+    data = fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8");
+  } catch (e) {
+    return {};
+  }
+
+  if (data[0] == "[") {
+    throw new Error("Your ~/.amorc is still in ini format, you need to convert it to JSON");
+  }
+
+  return JSON.parse(data);
+}
+
+/**
+ * Return the configuration data from the file, either by reading it or the cached copy.
+ *
+ * @return {Object}         The configuration object.
+ */
+function getConfig() {
+  if (!gConfigData) {
+    gConfigData = readConfig();
+  }
+  return gConfigData;
+}
+
+
+class CaselessMap extends Map {
+  constructor(iterable) {
+    let data = [];
+    for (let [k, v] of iterable) {
+      data.push([k.toLowerCase(), v]);
+    }
+
+    super(data);
+  }
+
+  has(key) {
+    return super.has(key.toLowerCase());
+  }
+
+  set(key, value) {
+    return super.set(key.toLowerCase(), value);
+  }
+
+  get(key) {
+    return super.get(key.toLowerCase());
+  }
+}
+
+module.exports = { regexEscape, waitForStdin, waitForInput, bold, getConfig, CaselessMap };
