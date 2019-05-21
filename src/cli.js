@@ -386,11 +386,12 @@ async function displayPending(client, bugzilla, compareWith="blocklists-preview"
  * @return {Promise<Object>}    The redash response.
  */
 async function redashSQL(sql) {
-  let config = getConfig();
-  if (config && config.auth && config.auth.redash_key) {
+  let auth = getConfig("auth") || {};
+
+  if (auth.redash_key) {
     let redash = new RedashClient({
       endPoint: constants.REDASH_URL,
-      apiToken: config.auth.redash_key,
+      apiToken: auth.redash_key,
       agent: `${packageJSON.name}/${packageJSON.version}`
     });
 
@@ -613,12 +614,38 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
     }
   }
 
+  let canned = getConfig("mozblocklist", "canned") || {};
+  let reasons = Object.keys(canned);
+
+
   if (bugData) {
     name = await waitForInput(`Name for this block [${bugData.name}]:`, false) || bugData.name;
-    reason = await waitForInput(`Reason for this block [${bugData.reason}]:`, false) || bugData.reason;
   } else {
     name = await waitForInput("Name for this block:", false);
-    reason = await waitForInput("Reason for this block:", false);
+  }
+
+  while (true) {
+    reason = await waitForInput(`Reason for this block [${reasons.join(",")},custom]:`, false);
+    if (reason == "custom") {
+      reason = {
+        bugzilla: await waitForInput("Bugzilla reason:", false),
+        kinto: await waitForInput("Kinto reason:", false),
+      };
+      break;
+    } else if (canned.hasOwnProperty(reason)) {
+      reason = canned[reason];
+      if (reason.kinto && reason.bugzilla) {
+        break;
+      } else {
+        console.log("The reason config seems wrong, it needs both a bugzilla and a kinto key");
+      }
+    } else {
+      console.log("Unknown reason, use 'custom' for a custom reason");
+    }
+  }
+
+
+  if (!bugData) {
     additionalInfo = await waitForInput("Any additional info for the bug?", false);
   }
 
@@ -647,9 +674,14 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
 
   let answer = await waitForInput("Ready to create the blocklist entry? [yN]");
   if (answer == "y") {
-    if (!bugid) {
+    if (bugid) {
+      await bugzilla.update({
+        ids: [bugid],
+        comment: { body: reason.bugzilla }
+      });
+    } else {
       let versions = minVersion == "0" && maxVersion == "*" ? "<all versions>" : `${minVersion} - ${maxVersion}`;
-      let description = compileDescription(name, versions, reason, severity, guids, additionalInfo);
+      let description = compileDescription(name, versions, reason.bugzilla, severity, guids, additionalInfo);
       let account = await bugzilla.whoami();
 
       bugid = await bugzilla.create({
@@ -668,7 +700,7 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
     }
 
     let guidstring = createGuidString(guids);
-    let entry = await client.createBlocklistEntry(guidstring, bugid, name, reason, severity, minVersion, maxVersion);
+    let entry = await client.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
     console.log(`\tDone, see ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
   } else {
     console.log("In case you decide to do so later, here is the guid regex:");

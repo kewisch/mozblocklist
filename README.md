@@ -15,19 +15,14 @@ file, or you can enter them manually.
 Configuration
 -------------
 
-mozblocklist does not need any configuration, unless you use one of the features that require access
-to redash or bugzilla. This is for example if you use `mozblocklist check -i` to retrieve the guids
-for ids from redash, or if you want to have bugs automatically marked as fixed when using
-`mozblocklist sign`.
+mozblocklist has a number of configuration options that are not necessary, but make it much more
+useful. The configuration file is at `~/.amorc` and is a JSON file. This file is shared with various
+other tools around AMO, such as [pyamo](https://github.com/kewisch/pyamo).
 
-If you make use of [pyamo](https://github.com/kewisch/pyamo) you will already have the redash
-config, but may need to add a bugzilla api key.
+### `auth` section
+This section contains API keys, for redash and bugzilla:
 
-To create the config, you can add a `~/.amorc` (or `%HOME%/amorc.ini` on Windows). This happens to
-be the same file that [pyamo](https://github.com/kewisch/pyamo) uses. You'll need to set your redash
-user api key (not the query key) and bugzilla api token in the `[auth]` section:
-
-```
+```json
 {
   "auth": {
     "redash_key": "42c85d86fd212538f4394f47c80fa62c",
@@ -36,13 +31,16 @@ user api key (not the query key) and bugzilla api token in the `[auth]` section:
 }
 ```
 
+### `mozblocklist.reviewers` section
 For the `mozblocklist review` feature, you can also configure reviewer aliases as such:
 
-```
+```json
 {
-  "reviewers": {
-    "alias1": { "name": "Name", "email": "email@example.com" },
-    "alias2": { "name": "Other Name", "email": "email2@example.com" }
+  "mozblocklist": {
+    "reviewers": {
+      "alias1": { "name": "Name", "email": "email@example.com" },
+      "alias2": { "name": "Other Name", "email": "email2@example.com" }
+    }
   }
 }
 ```
@@ -50,16 +48,23 @@ For the `mozblocklist review` feature, you can also configure reviewer aliases a
 The name will be used in the bugzilla comment, so you will likely pick the reviewer's first name.
 The email is the bugzilla email. You can then use `mozblocklist review -r alias1` to ask for review.
 
-If you would like to set a default reviewer, you can do so in the mozblocklist section. This section
-can also used to set other default arguments. The reviewer alias is case insensitive.
+### `mozblocklist.defaults` section
+Within mozblocklist there is a defaults section, which can be used to configure command line flag
+defaults. This is using the
+[yargs config object feature](https://github.com/yargs/yargs/blob/master/docs/api.md#configobject).
 
-```
+For example, you could set a default reviewer:
+
+```json
 {
   "mozblocklist": {
-    "reviewer": "alias1"
+    "defaults": {
+      "reviewer": "alias1"
+    }
   }
 }
 ```
+
 
 Examples
 --------

@@ -105,13 +105,24 @@ function readConfig() {
 /**
  * Return the configuration data from the file, either by reading it or the cached copy.
  *
- * @return {Object}         The configuration object.
+ * @param {...string} configpath    The configuration path to look up.
+ * @return {Object}                 The configuration object at this path.
  */
-function getConfig() {
+function getConfig(...configpath) {
   if (!gConfigData) {
     gConfigData = readConfig();
   }
-  return gConfigData;
+
+  if (configpath) {
+    let data = gConfigData;
+    while (data && configpath.length) {
+      let next = configpath.shift();
+      data = data[next];
+    }
+    return data;
+  } else {
+    return gConfigData;
+  }
 }
 
 
