@@ -674,15 +674,17 @@ async function createBlocklistEntryInteractively(client, bugzilla, guids, canCon
 
   let answer = await waitForInput("Ready to create the blocklist entry? [yN]");
   if (answer == "y") {
+    let account = await bugzilla.whoami();
     if (bugid) {
       await bugzilla.update({
         ids: [bugid],
-        comment: { body: reason.bugzilla }
+        comment: { body: reason.bugzilla },
+        assigned_to: account.name,
+        status: "ASSIGNED"
       });
     } else {
       let versions = minVersion == "0" && maxVersion == "*" ? "<all versions>" : `${minVersion} - ${maxVersion}`;
       let description = compileDescription(name, versions, reason.bugzilla, severity, guids, additionalInfo);
-      let account = await bugzilla.whoami();
 
       bugid = await bugzilla.create({
         product: "Toolkit",
