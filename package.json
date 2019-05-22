@@ -1,6 +1,6 @@
 {
   "name": "mozblocklist",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Find and add add-ons to the Mozilla blocklist",
   "main": "src/cli.js",
   "dependencies": {
@@ -13,8 +13,8 @@
     "yargs": "^12.0.5"
   },
   "devDependencies": {
-    "eslint": "^5.14.1",
-    "eslint-plugin-jsdoc": "^5.0.2"
+    "eslint": "^5.16.0",
+    "eslint-plugin-jsdoc": "^6.0.2"
   },
   "author": "Philipp Kewisch",
   "license": "MPL-2.0",
