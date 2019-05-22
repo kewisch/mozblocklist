@@ -1,748 +1,16 @@
-#!/usr/bin/env node
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * Portions Copyright (C) Philipp Kewisch, 2018 */
-
-var yargs = require("yargs");
-var keytar = require("keytar");
-var RedashClient = require("redash-client");
-var packageJSON = require("../package.json");
-
-var BlocklistKintoClient = require("./kinto-client");
-var BugzillaClient = require("./bugzilla");
-var { regexEscape, waitForStdin, waitForInput, bold, getConfig, CaselessMap } = require("./utils");
-var constants = require("./constants");
-
-/**
- * A map between a string guid and its blocklist data
- * @typedef {Map<string,Object>} BlocklistMap
- */
-
-/**
- * A map between regex guids and its blocklist data
- * @typedef {Map<RegExp,Object>} BlocklistRegexMap
- */
-
-/**
- * Blocklist bug data.
- *
- * @typedef {Object} BlocklistBugData
- * @property {integer} id                   The bug id
- * @property {string} name                  The extension name, from the block
- * @proeprty {string} reason                The first line of the reason field
- * @property {string[]} guids               The array of guids to block
- */
-
-
-/**
- * Existing and new guids object.
- *
- * @typedef {Object} GuidData
- * @property {BlocklistMap} existing        The existing guids.
- * @property {Set<string>} newguids         The new guids.
- */
-
-/**
- * Reads guids from an array of lines, skipping empty lines or those commented with #.
- *
- * @param {Array} lines                 The lines to parse.
- * @param {BlocklistMap} guids          The Map with guids and blocklist entry as
- *                                        provided by loadBlocklist.
- * @param {BlocklistRegexMap} regexes   The Map with regexes and blocklist entry as
- *                                        provided by loadBlocklist.
- * @return {GuidData}                   An array with existing and new guids.
- */
-function readGuidData(lines, guids, regexes) {
-  let existing = new Map();
-  let newguids = new Set();
-
-  for (let line of lines) {
-    let guid = line.trim();
-    if (!guid || guid.startsWith(constants.COMMENT_CHAR)) {
-      continue;
-    }
-    if (guids.has(guid)) {
-      let entry = guids.get(guid);
-      existing.set(guid, entry);
-    } else {
-      let regexmatches = [...regexes.keys()].filter(re => guid.match(re));
-      if (regexmatches.length) {
-        if (regexmatches.length > 1) {
-          console.error(`Warning: ${guid} appears in more than one regex block: ${regexmatches}`);
-        }
-        let entry = regexes.get(regexmatches[0]);
-        existing.set(guid, entry);
-      } else {
-        newguids.add(guid);
-      }
-    }
-  }
-
-  return { existing, newguids };
-}
-
-/**
- * Display the blocklist in various formats.
- *
- * @param {BlocklistKintoClient} client       The kinto client to access the blocklist.
- * @param {string} format                     The format, json or sql.
- * @param {boolean} loadAllGuids              For the SQL format, load guids from the AMO database
- *                                              instead of stdin.
- */
-async function displayBlocklist(client, format="json", loadAllGuids=false) {
-  if (format == "json") {
-    console.warn("Loading blocklist...");
-    let addons = await client.bucket("blocklists").collection("addons").listRecords();
-    console.log(JSON.stringify(addons, null, 2));
-  } else if (format == "sql") {
-    if (process.stdin.isTTY) {
-      console.warn("Loading blocklist...");
-    }
-    let [blockguids, blockregexes] = await client.loadBlocklist();
-
-    let data;
-    if (loadAllGuids) {
-      console.warn("Loading all guids from AMO-DB via redash...");
-      let result = await redashSQL("SELECT guid FROM addons WHERE guid IS NOT NULL");
-      data = result.query_result.data.rows.map(row => row.guid);
-    } else {
-      if (process.stdin.isTTY) {
-        console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
-      }
-      data = await waitForStdin();
-    }
-
-    console.warn("Applying blocklist entries to guids...");
-
-    let { existing } = readGuidData(data, blockguids, blockregexes);
-    let all = "";
-
-    for (let [guid, entry] of existing.entries()) {
-      let range = entry.versionRange[0];
-      let multirange = entry.versionRange.length > 1 ? 1 : 0;
-      console.log(
-        `${all}SELECT "${guid}" AS guid, "${entry.details.created}" AS created, ` +
-        `"${entry.details.bug}" AS bug, ${range.severity} AS severity, ` +
-        `"${range.minVersion}" AS minVersion, "${range.maxVersion}" AS maxVersion, ` +
-        `${multirange} AS multirange`
-      );
-      if (!all) {
-        all = "UNION ALL ";
-      }
-    }
-  }
-}
-
-/**
- * Send work in progress blocks to review.
- *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- * @param {string} reviewerName               The reviewer's name (e.g. First name).
- * @param {string} reviewerEmail              The reviewer's email.
- */
-async function reviewBlocklist(client, bugzilla, reviewerName, reviewerEmail) {
-  let pending = await displayPending(client, bugzilla, "staging");
-  let hasReviewer = bugzilla.authenticated && reviewerName && reviewerEmail;
-  let answer;
-  if (hasReviewer) {
-    answer = await waitForInput(`Ready to request review from ${reviewerName}? [yN]`);
-  } else {
-    answer = await waitForInput("Ready to request review? [yN]");
-  }
-
-  if (answer == "y") {
-    await client.reviewBlocklist();
-
-    if (hasReviewer) {
-      let bugs = pending.data
-        .filter(entry => !entry._alreadyRequestedBlock)
-        .map(entry => entry.details.bug.match(/id=(\d+)/)[1]);
-      bugs = [...new Set(bugs).values()];
-
-      if (bugs.length < pending.data.length) {
-        console.warn(`${pending.data.length - bugs.length} bugs already have a request for review`);
-      }
-      console.warn(`Requesting review from ${reviewerName} for bugs ${bugs.join(",")}...`);
-
-      await bugzilla.update({
-        ids: bugs,
-        comment: { body: `The block has been staged. ${reviewerName}, can you review and push?` },
-        flags: [{
-          name: "needinfo",
-          status: "?",
-          requestee: reviewerEmail
-        }]
-      });
-    } else {
-      let bugurls = pending.data.map(entry => entry.details.bug);
-      console.warn("You don't have a bugzilla API key or reviewers configured. Set one in ~/.amorc" +
-                   " or visit these bugs manually:");
-      console.warn("\t" + bugurls.join("\n\t"));
-    }
-  }
-}
-
-/**
- * Show blocks in the preview list and then sign after asking.
- *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- */
-async function reviewAndSignBlocklist(client, bugzilla) {
-  let pending = await displayPending(client, bugzilla);
-  let ready = await waitForInput("Ready to sign? [yN] ");
-  if (ready == "y") {
-    await signBlocklist(client, bugzilla, pending);
-  }
-}
-
-/**
- * Sign the blocklist, pushing the block.
- *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- * @param {?Object} pending                   The pending blocklist data in case it was retrieved
- *                                              before.
- */
-async function signBlocklist(client, bugzilla, pending=null) {
-  let removeSecurityGroup = false;
-  if (bugzilla.authenticated) {
-    removeSecurityGroup = await waitForInput("Remove blocklist-requests security group? [yN]");
-  }
-
-  console.warn("Signing blocklist...");
-  let res = pending || await client.getBlocklistPreview();
-  await client.signBlocklist();
-
-  if (bugzilla.authenticated) {
-    let bugs = [...new Set(res.data.map(entry => entry.details.bug.match(/id=(\d+)/)[1])).values()];
-    console.warn("Marking the following bugs as FIXED:");
-    for (let bug of bugs) {
-      console.warn("\thttps://bugzilla.mozilla.org/show_bug.cgi?id=" + bug);
-    }
-
-    let bugdata = {
-      ids: bugs,
-      comment: { body: "Done" },
-      flags: [{
-        name: "needinfo",
-        status: "X"
-      }],
-      resolution: "FIXED",
-      status: "RESOLVED"
-    };
-
-    if (removeSecurityGroup) {
-      bugdata.groups = { remove: ["blocklist-requests"] };
-    }
-    await bugzilla.update(bugdata);
-
-    console.warn("Done");
-  } else {
-    let bugurls = res.data.map(entry => entry.details.bug);
-    console.warn("You don't have a bugzilla API key configured. Set one in ~/.amorc or visit" +
-                 " these bugs manually:");
-    console.warn("\t" + bugurls.join("\n\t"));
-  }
-}
-
-/**
- * Get bugzilla comments since a certain date.
- *
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- * @param {Object<number,Date>} data          Map between bug id and date.
- * @return {Promise<Object<number,string[]>>} Map between bug id and comments.
- */
-async function getCommentsSince(bugzilla, data) {
-  let res = await bugzilla.getComments(Object.keys(data));
-  let comments = {};
-  for (let [id, entry] of Object.entries(res.bugs)) {
-    comments[id] = [];
-    for (let comment of entry.comments) {
-      let creation = new Date(comment.creation_time);
-      if (creation > data[id]) {
-        comments[id].push(`[${comment.time}|${comment.author}] - ${comment.text}`);
-      }
-    }
-  }
-
-  return comments;
-}
-
-/**
- * Get the severity string based on the constant.
- *
- * @param {number} severity     The severity constant.
- * @return {string}             The severity string.
- */
-function getSeverity(severity) {
-  let map = { 1: "soft", 3: "hard" };
-  return map[severity] || `unknown (${severity})`;
-}
-
-/**
- * Display guids pending for blocklisting.
- *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- * @param {string} compareWith                The collection to compare with. This is usually
- *                                              blocklists-preview or staging.
- */
-async function displayPendingGuids(client, bugzilla, compareWith="blocklists-preview") {
-  let pending = await client.compareAddonCollection(compareWith);
-
-  let output = pending.data.reduce((guids, { guid }) => {
-    if (guid.startsWith("/")) {
-      guids.push(...guid.substring(4, guid.length - 4).split(")|(").map(entry => entry.replace(/\\/g, "")));
-    } else {
-      guids.push(guid);
-    }
-    return guids;
-  }, []);
-
-  console.log(output.join("\n"));
-}
-
-/**
- * Display pending blocks.
- *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- * @param {string} compareWith                The collection to compare with. This is usually
- *                                              blocklists-preview or staging.
- * @return {Object}                          Pending blocklist data from kinto.
- */
-async function displayPending(client, bugzilla, compareWith="blocklists-preview") {
-  let pending = await client.compareAddonCollection(compareWith);
-
-  let bugData = pending.data.reduce((obj, entry) => {
-    obj[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
-    return obj;
-  }, {});
-
-  let comments = pending.data.length ? await getCommentsSince(bugzilla, bugData) : {};
-
-  for (let entry of pending.data) {
-    console.log(`Entry ${entry.id} - ${entry.details.name}`);
-    if (!entry.enabled) {
-      console.log("\tWarning: The blocklist entry is marked disabled");
-    }
-
-    console.log(`\tURL: ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.id}/attributes`);
-
-    console.log("\tReason: " + entry.details.why);
-    console.log("\tBug: " + entry.details.bug);
-    if (entry.versionRange.length == 1 &&
-        entry.versionRange[0].minVersion == "0" &&
-        entry.versionRange[0].maxVersion == "*") {
-      console.log("\tRange: Blocking all versions, severity " + getSeverity(entry.versionRange[0].severity));
-    } else {
-      console.log("\tRange: Partial block with the following version ranges:");
-      for (let range of entry.versionRange) {
-        console.log(`\t\t ${range.minVersion} - ${range.maxVersion} (severity ${getSeverity(range.severity)})`);
-      }
-    }
-
-    if (entry.guid.startsWith("/")) {
-      try {
-        // eslint-disable-next-line no-new
-        new RegExp(entry.guid.substring(1, entry.guid.length - 1));
-        console.log("\tGUIDs (valid): " + entry.guid);
-      } catch (e) {
-        console.log("\tGUIDs (INVALID): " + entry.guid);
-      }
-    } else {
-      console.log("\tGUID: " + entry.guid);
-    }
-
-    if (entry.prefs.length) {
-      console.log("Prefs: ", entry.prefs);
-    }
-
-    let bugId = entry.details.bug.match(/id=(\d+)/)[1];
-    if (bugId in comments) {
-      console.log("\tComments since the block was staged:");
-      for (let comment of comments[bugId]) {
-        console.log("\t\t" + comment.replace(/\n/g, "\n\t\t\t"));
-        if (comment.includes("The block has been staged")) {
-          entry._alreadyRequestedBlock = true;
-        }
-      }
-    }
-  }
-
-  if (!pending.data.length) {
-    console.log("No blocks pending");
-  }
-
-  return pending;
-}
-
-/**
- * Get SQL data from redash.
- *
- * @param {string} sql          The SQL to query.
- * @return {Promise<Object>}    The redash response.
- */
-async function redashSQL(sql) {
-  let auth = getConfig("auth") || {};
-
-  if (auth.redash_key) {
-    let redash = new RedashClient({
-      endPoint: constants.REDASH_URL,
-      apiToken: auth.redash_key,
-      agent: `${packageJSON.name}/${packageJSON.version}`
-    });
-
-    let result = await redash.queryAndWaitResult({
-      query: sql,
-      data_source_id: constants.REDASH_AMO_DB
-    });
-
-    return result;
-  } else {
-    throw new Error("Missing redash API key in ~/.amorc");
-  }
-}
-
-/**
- * Check for guids provided in stdin if they are in the blocklist, optionally creating the blocklist
- * entry. This will start the interactive workflow.
- *
- * @param {BlocklistKintoClient} client       The kinto client to maninpulate the blocklist.
- * @param {BugzillaClient} bugzilla           The bugzilla client to file and update bugs.
- * @param {Object} options                    The options for this call, see following.
- * @param {boolean} options.create              If true, creation will also be prompted.
- * @param {boolean} options.canContinue         Also create the entry if there are work in progress items.
- * @param {string[]} options.guids              The guids to check, can be empty.
- * @param {boolean} options.useIds              If add-on ids are used instead.
- * @param {integer} options.bug                 The bug to optionally take information from.
- */
-async function checkGuidsInteractively(client, bugzilla, { create = false, canContinue = false, guids = [], useIds = false, bug = null }) {
-  if (process.stdin.isTTY && !guids.length && !bug) {
-    console.warn("Loading blocklist...");
-  }
-
-  let [blockguids, blockregexes] = await client.loadBlocklist();
-
-  if (process.stdin.isTTY && !guids.length && !bug) {
-    console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
-  }
-
-  let data;
-  let bugData;
-  if (bug) {
-    bugData = await parseBlocklistBug(bugzilla, bug);
-    data = bugData.guids;
-  } else if (guids.length) {
-    data = guids;
-  } else {
-    data = await waitForStdin();
-  }
-
-  if (useIds) {
-    console.warn("Querying guids from AMO-DB via redash");
-    let result = await redashSQL(`SELECT guid FROM addons WHERE id IN (${data.join(",")})`);
-    data = result.query_result.data.rows.map(row => row.guid);
-  }
-
-  let { existing, newguids } = readGuidData(data, blockguids, blockregexes);
-  let newguidvalues = [...newguids.values()];
-
-  console.warn("");
-
-  // Show existing guids for information
-  if (existing.size) {
-    console.log(bold("The following guids are already blocked:"));
-    for (let [guid, entry] of existing.entries()) {
-      console.log(`${guid} - ${entry.details.bug}`);
-    }
-    console.log("");
-  }
-
-  // Show a list of new guids that can be blocked
-  if (newguids.size > 0) {
-    console.log(bold("Here is a list of all guids not yet blocked:"));
-    console.log(newguidvalues.join("\n"));
-
-    if (create) {
-      await createBlocklistEntryInteractively(client, bugzilla, newguidvalues, canContinue, bugData);
-    } else {
-      console.log("");
-      console.log(bold("Here is the list of guids for kinto:"));
-      console.log(createGuidString(newguidvalues));
-    }
-  } else {
-    console.log("Nothing new to block");
-  }
-}
-
-/**
- * Create the markdown description for new blocklisting bugs.
- *
- * @param {string} name                 The extension name.
- * @param {string} versions             The version range(s).
- * @param {string} reason               The reason to block.
- * @param {number} severity             The blocklist severity constant.
- * @param {string[]} guids              An array of guids to block.
- * @param {?string} additionalInfo      Additional information for the bug.
- * @param {?string} platformVersions    The platform version range.
- * @return {string}                     The markdown description.
- */
-function compileDescription(name, versions, reason, severity, guids, additionalInfo=null, platformVersions="<all platforms>") {
-  /**
-   * Removes backticks from the start of each line for use in a backticked string.
-   *
-   * @param {string} str    Input string.
-   * @return {string}       The removed backtick string.
-   */
-  function backtick(str) {
-    return str.replace(/^\s*```/mg, "").trim();
-  }
-
-  /**
-   * Replaces links in the string with hxxp:// links, except for AMO links.
-   *
-   * @param {string} str    Input string.
-   * @return {string}       The sanitized string.
-   */
-  function unlink(str) {
-    return str.replace(/http(s?):\/\/(?!(reviewers\.)?addons.mozilla.org)/g, "hxxp$1://");
-  }
-
-  /**
-   * Create a markdown table with an empty header based on the array. The array is an array of rows.
-   * Each row is an array of columns.
-   *
-   * @param {Array<string[]>} arr        Array of cells.
-   * @return {string}                    The markdown table.
-   */
-  function table(arr) {
-    function escapeTable(str) { // eslint-disable-line require-jsdoc
-      return str.replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
-    }
-    return "| | |\n|-|-|\n|" + arr.map((row) => {
-      return row.map(escapeTable).join("|");
-    }).join("|\n|") + "|\n";
-  }
-
-  let descr = table([
-    ["Extension name", name],
-    ["Extension versions affected", versions],
-    ["Platforms affected", platformVersions],
-    ["Block severity", getSeverity(severity)]
-  ]);
-
-  descr += "\n### Reason\n" + unlink(reason);
-  descr += "\n\n### Extension GUIDs\n```\n" + backtick(guids.join("\n")) + "\n```";
-
-  if (additionalInfo) {
-    descr += "\n\n### Additional Information\n" + unlink(additionalInfo.trim());
-  }
-
-  return descr;
-}
-
-/**
- * Parse a blocklist bug that uses the form.
- *
- * @param {BugzillaClient} bugzilla       The bugzilla client for retrieving comments.
- * @param {integer} id                    The bug id.
- * @return {Promise<BlocklistBugData>}    The parsed blocklist data.
- */
-async function parseBlocklistBug(bugzilla, id) {
-  let data = await bugzilla.getComments([id]);
-  let text = data.bugs[id].comments[0].text;
-
-  let matches = text.match(/Extension name\|([^|]*)\|/);
-  let name = matches && matches[1].trim();
-
-  matches = text.match(/### Extension (GU)?IDs\n```([\s\S]+)\n```/);
-  let guids = matches && matches[2].trim().split("\n");
-
-
-  matches = text.match(/### Reason\n([^#]+)/);
-  let reason = matches && matches[1].trim().split("\n")[0];
-
-  if (!name || !reason || !guids) {
-    console.warn("Not a blocklist bug using the form");
-    return null;
-  }
-
-  return { id, name, reason, guids };
-}
-
-/**
- * Prompt for information required to create a blocklist entry and create it. This requires the
- * blocklist to be clean and not work in progress.
- *
- * @param {BlocklistKintoClient} client   The blocklist client to create with.
- * @param {BugzillaClient} bugzilla       The bugzilla client to file and update bugs.
- * @param {string[]} guids                The guid strings for the blocklist entry.
- * @param {boolean} canContinue           Also create the entry if there are work in progress items.
- * @param {BlocklistBugData} bugData      The data from the blocklist bug for names and reasons.
- */
-async function createBlocklistEntryInteractively(client, bugzilla, guids, canContinue=false, bugData=null) {
-  let requestedStates = ["signed"];
-  if (canContinue) {
-    requestedStates.push("work-in-progress", "to-review");
-  }
-  await client.ensureBlocklistState(requestedStates);
-
-  let bugid, name, reason;
-  let additionalInfo = null;
-
-  if (bugData) {
-    bugid = bugData.id;
-  } else {
-    while (true) {
-      bugid = await waitForInput("Bug id or link (leave empty to create):");
-      bugid = bugid.replace("https://bugzilla.mozilla.org/show_bug.cgi?id=", "");
-
-      if (!bugid && !bugzilla.authenticated) {
-        console.log("You need to specify a bugzilla API key in the config or enter a bug id here");
-      } else if (bugid && isNaN(parseInt(bugid, 10))) {
-        console.log("Invalid bug id or link");
-      } else {
-        break;
-      }
-    }
-
-    if (bugid) {
-      bugData = await parseBlocklistBug(bugzilla, bugid);
-    }
-  }
-
-  let canned = getConfig("mozblocklist", "canned") || {};
-  let reasons = Object.keys(canned);
-
-
-  if (bugData) {
-    name = await waitForInput(`Name for this block [${bugData.name}]:`, false) || bugData.name;
-  } else {
-    name = await waitForInput("Name for this block:", false);
-  }
-
-  while (true) {
-    reason = await waitForInput(`Reason for this block [${reasons.join(",")},custom]:`, false);
-    if (reason == "custom") {
-      reason = {
-        bugzilla: await waitForInput("Bugzilla reason:", false),
-        kinto: await waitForInput("Kinto reason:", false),
-      };
-      break;
-    } else if (canned.hasOwnProperty(reason)) {
-      reason = canned[reason];
-      if (reason.kinto && reason.bugzilla) {
-        break;
-      } else {
-        console.log("The reason config seems wrong, it needs both a bugzilla and a kinto key");
-      }
-    } else {
-      console.log("Unknown reason, use 'custom' for a custom reason");
-    }
-  }
-
-
-  if (!bugData) {
-    additionalInfo = await waitForInput("Any additional info for the bug?", false);
-  }
-
-  let severity;
-  while (true) {
-    severity = await waitForInput("Severity [HARD/soft]:");
-    if (severity == "hard" || severity == "") {
-      severity = constants.HARD_BLOCK;
-      break;
-    } else if (severity == "soft") {
-      severity = constants.SOFT_BLOCK;
-      break;
-    }
-
-    console.log("Invalid severity, must be hard or soft");
-  }
-
-  let minVersion = "0";
-  let maxVersion = "*";
-
-  // Only prompt for version when not using a regex, this case is not very common.
-  if (guids.length == 1) {
-    minVersion = await waitForInput("Minimum version [0]:") || "0";
-    maxVersion = await waitForInput("Maximum version [*]:") || "*";
-  }
-
-  let answer = await waitForInput("Ready to create the blocklist entry? [yN]");
-  if (answer == "y") {
-    let account = await bugzilla.whoami();
-    if (bugid) {
-      await bugzilla.update({
-        ids: [bugid],
-        comment: { body: reason.bugzilla },
-        assigned_to: account.name,
-        status: "ASSIGNED"
-      });
-    } else {
-      let versions = minVersion == "0" && maxVersion == "*" ? "<all versions>" : `${minVersion} - ${maxVersion}`;
-      let description = compileDescription(name, versions, reason.bugzilla, severity, guids, additionalInfo);
-
-      bugid = await bugzilla.create({
-        product: "Toolkit",
-        component: "Blocklist Policy Requests",
-        version: "unspecified",
-        summary: "Extension block request: " + name,
-        description: description,
-        whiteboard: "[extension]",
-        status: "ASSIGNED",
-        assigned_to: account.name,
-        groups: ["blocklist-requests"]
-      });
-
-      console.log(`Created https://bugzilla.mozilla.org/show_bug.cgi?id=${bugid} for this entry`);
-    }
-
-    let guidstring = createGuidString(guids);
-    let entry = await client.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
-    console.log(`\tDone, see ${client.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
-  } else {
-    console.log("In case you decide to do so later, here is the guid regex:");
-    console.log(createGuidString(guids));
-  }
-}
-
-/**
- * Create the kinto guid string, so string with regex or a simple uuid.
- *
- * @param {string[]} guids      The array of guids.
- * @return {string}             The compiled guid string.
- */
-function createGuidString(guids) {
-  if (guids.length > 1) {
-    return "/^((" + guids.map(regexEscape).join(")|(") + "))$/";
-  } else {
-    return guids[0];
-  }
-}
-
-/**
- * Print the current blocklist status in a human readable form.
- *
- * @param {BlocklistKintoClient} client       The blocklist client.
- */
-async function printBlocklistStatus(client) {
-  let status = await client.getBlocklistStatus();
-  let map = {
-    "signed": "Signed and ready",
-    "to-sign": "Signed and ready",
-    "work-in-progress": "Blocklist entries work in progress",
-    "to-review": "Blocklist staged, waiting for review",
-    "_": "Unknown: %s"
-  };
-
-  let string = (map[status] || map._).replace("%s", status);
-  console.log(string);
-}
+ * Portions Copyright (C) Philipp Kewisch, 2018-2019 */
+
+import yargs from "yargs";
+import keytar from "keytar";
+import { AMORedashClient, BMOClient } from "amolib";
+
+import BlocklistKintoClient from "./kinto-client";
+import Mozblocklist from "./mozblocklist";
+import { PUBLIC_HOST, PROD_HOST, STAGE_HOST } from "./constants";
+import { getConfig, CaselessMap } from "./utils";
 
 /**
  * The main program executed when called.
@@ -784,14 +52,14 @@ async function printBlocklistStatus(client) {
   let argv = yargs
     .option("H", {
       "alias": "host",
-      "default": constants.PUBLIC_HOST,
+      "default": PUBLIC_HOST,
       "describe": "The kinto host to access"
     })
     .option("W", {
       alias: "writer",
       conflicts: "stage",
       // Can't have a real default here because it will conflict with the stage option
-      describe: `The writer instance of kinto to use.                      [default: "${constants.PROD_HOST}"]`
+      describe: `The writer instance of kinto to use.                      [default: "${PROD_HOST}"]`
     })
     .option("s", {
       "alias": "stage",
@@ -874,10 +142,10 @@ async function printBlocklistStatus(client) {
   let writer;
   let remote;
   if (argv.stage) {
-    writer = `https://${constants.STAGE_HOST}/v1`;
-    remote = `https://${constants.STAGE_HOST}/v1`;
+    writer = `https://${STAGE_HOST}/v1`;
+    remote = `https://${STAGE_HOST}/v1`;
   } else {
-    writer = `https://${argv.writer || constants.PROD_HOST}/v1`;
+    writer = `https://${argv.writer || PROD_HOST}/v1`;
     remote = `https://${argv.host}/v1`;
   }
 
@@ -896,17 +164,20 @@ async function printBlocklistStatus(client) {
     }
   };
 
-  let client = new BlocklistKintoClient(remote, { writer, auth });
-  let bugzilla = new BugzillaClient("https://bugzilla.mozilla.org", config.auth && config.auth.bugzilla_key);
+  let mozblock = new Mozblocklist({
+    kinto: new BlocklistKintoClient(remote, { writer, auth }),
+    bugzilla: new BMOClient(config.auth && config.auth.bugzilla_key),
+    redash: new AMORedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug })
+  });
 
   switch (argv._[0]) {
     case "list":
-      await displayBlocklist(client, argv.format, argv.all || false);
+      await mozblock.displayBlocklist(argv.format, argv.all || false);
       break;
 
     case "create":
     case "check":
-      await checkGuidsInteractively(client, bugzilla, {
+      await mozblock.checkGuidsInteractively({
         create: argv._[0] == "create",
         canContinue: !!argv["continue"],
         guids: argv.guids || [],
@@ -917,23 +188,23 @@ async function printBlocklistStatus(client) {
 
     case "pending":
       if (argv.guids) {
-        await displayPendingGuids(client, bugzilla, argv.wip ? "staging" : "blocklists-preview");
+        await mozblock.displayPendingGuids(argv.wip ? "staging" : "blocklists-preview");
       } else {
-        await displayPending(client, bugzilla, argv.wip ? "staging" : "blocklists-preview");
+        await mozblock.displayPending(argv.wip ? "staging" : "blocklists-preview");
       }
       break;
 
     case "status":
-      await printBlocklistStatus(client);
+      await mozblock.printBlocklistStatus();
       break;
     case "review":
-      await reviewBlocklist(client, bugzilla, argv.reviewer[0], argv.reviewer[1]);
+      await mozblock.reviewBlocklist(argv.reviewer[0], argv.reviewer[1]);
       break;
     case "sign":
-      await reviewAndSignBlocklist(client, bugzilla);
+      await mozblock.reviewAndSignBlocklist();
       break;
     case "reject":
-      await client.rejectBlocklist();
+      await mozblock.kinto.rejectBlocklist();
       break;
     default:
       yargs.showHelp();

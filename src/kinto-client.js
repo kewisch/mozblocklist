@@ -1,23 +1,19 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * Portions Copyright (C) Philipp Kewisch, 2018 */
+ * Portions Copyright (C) Philipp Kewisch, 2018-2019 */
 
-// Inject fetch so that kinto-http can make use of it
-global.fetch = require("node-fetch");
-
-var KintoClient = require("kinto-http");
-var { open } = require("openurl");
-var querystring = require("querystring");
-var http = require("http");
-var { URL, parse: urlparse } = require("url");
-
-var { HARD_BLOCK } = require("./constants");
+import KintoClient from "kinto-http";
+import querystring from "querystring";
+import http from "http";
+import { open } from "openurl";
+import { URL, parse as urlparse } from "url";
+import { HARD_BLOCK } from "./constants";
 
 /**
  * Blocklisting specific version of the KintoClient
  */
-class BlocklistKintoClient extends KintoClient {
+export default class BlocklistKintoClient extends KintoClient {
   /**
    * Construct the kinto client. Remote and options are the same as for KintoClient. There is an
    * additional option `writer` which is the hostname of the settings-writer instance. When
@@ -271,5 +267,3 @@ class BlocklistKintoClient extends KintoClient {
     await this._updateCollectionStatus("work-in-progress");
   }
 }
-
-module.exports = BlocklistKintoClient;

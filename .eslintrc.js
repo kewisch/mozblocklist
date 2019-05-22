@@ -9,7 +9,8 @@ module.exports = {
     "jsdoc"
   ],
   "parserOptions": {
-    "ecmaVersion": 8
+    "ecmaVersion": 10,
+    "sourceType": "module"
   },
   "globals": {
     "self": true

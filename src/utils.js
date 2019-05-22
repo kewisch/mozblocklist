@@ -1,12 +1,12 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
- * Portions Copyright (C) Philipp Kewisch, 2018 */
+ * Portions Copyright (C) Philipp Kewisch, 2018-2019 */
 
-var readline = require("readline");
-var fs = require("fs");
-var os = require("os");
-var path = require("path");
+import readline from "readline";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 var gConfigData = null;
 
@@ -25,7 +25,7 @@ function regexEscape(str) {
  *
  * @return {Promise<string[]>}      An array with the lines from stdin.
  */
-function waitForStdin() {
+export function waitForStdin() {
   return new Promise((resolve) => {
     let lines = [];
     let rli = readline.createInterface({ input: process.stdin, });
@@ -44,7 +44,7 @@ function waitForStdin() {
  * @param {boolean} [lowercase=true]    If the result should be made lowercase.
  * @return {Promise<string>}            The string result with the answer.
  */
-function waitForInput(prompt, lowercase=true) {
+export function waitForInput(prompt, lowercase=true) {
   return new Promise((resolve, reject) => {
     if (process.platform == "win32") {
       // win32 does not have /dev/tty. We need to find an alternative way to read from the terminal
@@ -78,7 +78,7 @@ function waitForInput(prompt, lowercase=true) {
  * @param {string} text     The string to make bold.
  * @return {string}         The bold text.
  */
-function bold(text) {
+export function bold(text) {
   return `\x1b[1m${text}\x1b[0m`;
 }
 
@@ -108,7 +108,7 @@ function readConfig() {
  * @param {...string} configpath    The configuration path to look up.
  * @return {Object}                 The configuration object at this path.
  */
-function getConfig(...configpath) {
+export function getConfig(...configpath) {
   if (!gConfigData) {
     gConfigData = readConfig();
   }
@@ -126,7 +126,7 @@ function getConfig(...configpath) {
 }
 
 
-class CaselessMap extends Map {
+export class CaselessMap extends Map {
   constructor(iterable) {
     let data = [];
     for (let [k, v] of iterable) {
@@ -149,4 +149,27 @@ class CaselessMap extends Map {
   }
 }
 
-module.exports = { regexEscape, waitForStdin, waitForInput, bold, getConfig, CaselessMap };
+/**
+ * Get the severity string based on the constant.
+ *
+ * @param {number} severity     The severity constant.
+ * @return {string}             The severity string.
+ */
+export function getSeverity(severity) {
+  let map = { 1: "soft", 3: "hard" };
+  return map[severity] || `unknown (${severity})`;
+}
+
+/**
+ * Create the kinto guid string, so string with regex or a simple uuid.
+ *
+ * @param {string[]} guids      The array of guids.
+ * @return {string}             The compiled guid string.
+ */
+export function createGuidString(guids) {
+  if (guids.length > 1) {
+    return "/^((" + guids.map(regexEscape).join(")|(") + "))$/";
+  } else {
+    return guids[0];
+  }
+}
