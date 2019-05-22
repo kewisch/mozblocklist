@@ -5,6 +5,7 @@
  * Portions Copyright (C) Philipp Kewisch, 2018 */
 
 var yargs = require("yargs");
+var keytar = require("keytar");
 var RedashClient = require("redash-client");
 var packageJSON = require("../package.json");
 
@@ -879,7 +880,23 @@ async function printBlocklistStatus(client) {
     writer = `https://${argv.writer || constants.PROD_HOST}/v1`;
     remote = `https://${argv.host}/v1`;
   }
-  let client = new BlocklistKintoClient(remote, { writer });
+
+
+  let auth = {
+    get: async function() {
+      return keytar.getPassword("mozblocklist", "oauth");
+    },
+
+    set: async function(header) {
+      return keytar.setPassword("mozblocklist", "oauth", header);
+    },
+
+    remove: async function() {
+      return keytar.deletePassword("mozblocklist", "oauth");
+    }
+  };
+
+  let client = new BlocklistKintoClient(remote, { writer, auth });
   let bugzilla = new BugzillaClient("https://bugzilla.mozilla.org", config.auth && config.auth.bugzilla_key);
 
   switch (argv._[0]) {

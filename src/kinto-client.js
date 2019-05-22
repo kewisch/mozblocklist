@@ -10,7 +10,7 @@ var KintoClient = require("kinto-http");
 var { open } = require("openurl");
 var querystring = require("querystring");
 var http = require("http");
-var url = require("url");
+var { URL, parse: urlparse } = require("url");
 
 var { HARD_BLOCK } = require("./constants");
 
@@ -30,12 +30,42 @@ class BlocklistKintoClient extends KintoClient {
     let writer = options.writer;
     delete options.writer;
 
+    let auth = options.auth;
+    delete options.auth;
+
     super(remote, options);
 
     if (writer) {
       this.remote_writer = writer;
     }
     this.remote_reader = remote;
+    this.auth = auth || { get: () => {}, set: () => {} };
+
+    let request = this.http.request.bind(this.http);
+    this.http.request = this.httpRequest.bind(this, request);
+  }
+
+  async httpRequest(origRequest, url, request = { headers: {} }, options = { retry: 0 }) {
+    let response;
+    try {
+      response = await origRequest(url, request, options);
+    } catch (e) {
+      if (e.data.code == 401) {
+        await this.deauthorize();
+        await this.authorize();
+
+        request.headers.Authorization = await this.auth.get();
+        response = await origRequest(url, request, options);
+      } else {
+        throw e;
+      }
+    }
+
+    return response;
+  }
+
+  async deauthorize() {
+    await this.auth.remove();
     this.authorized = false;
   }
 
@@ -44,8 +74,19 @@ class BlocklistKintoClient extends KintoClient {
    * authentication.
    */
   async authorize() {
+    if (this.authorized) {
+      return;
+    }
+
     // Make sure we are using the writer when doing authenticated requests
     this.remote = this.remote_writer;
+
+    let authHeader = await this.auth.get();
+    if (authHeader) {
+      this.setHeaders({ Authorization: authHeader });
+      this.authorized = true;
+      return;
+    }
 
     let server = http.createServer();
 
@@ -59,7 +100,7 @@ class BlocklistKintoClient extends KintoClient {
     });
 
     // Open the URL in the browser to trigger authentication
-    let authURL = new url.URL("/v1/openid/ldap/login?" + querystring.stringify({
+    let authURL = new URL("/v1/openid/ldap/login?" + querystring.stringify({
       callback: `http://127.0.0.1:${port}/mozblocklist?token=`,
       scope: "openid email"
     }), this.remote);
@@ -68,7 +109,7 @@ class BlocklistKintoClient extends KintoClient {
     // Wait for the response from the browser and shut down the http server
     let response = await new Promise((resolve) => {
       server.on("request", (req, res) => {
-        let query = url.parse(req.url, true).query;
+        let query = urlparse(req.url, true).query;
         if (query.token) {
           let token = Buffer.from(query.token, "base64").toString("ascii");
           let tokendata = JSON.parse(token);
@@ -83,18 +124,11 @@ class BlocklistKintoClient extends KintoClient {
 
     server.close();
 
-    this.setHeaders({ Authorization: `${response.token_type} ${response.access_token}` });
+    let auth = `${response.token_type} ${response.access_token}`;
+    this.setHeaders({ Authorization: auth });
+    await this.auth.set(auth);
 
     this.authorized = true;
-  }
-
-  /**
-   * Make sure the client is authorized.
-   */
-  async ensureAuthorized() {
-    if (!this.authorized) {
-      await this.authorize();
-    }
   }
 
   /**
@@ -136,7 +170,7 @@ class BlocklistKintoClient extends KintoClient {
    * @return {Object}           The blocklist entry from the server.
    */
   async createBlocklistEntry(guid, bug, name, reason, severity=HARD_BLOCK, minVersion="0", maxVersion="*") {
-    await this.ensureAuthorized();
+    await this.authorize();
 
     let entry = await this.bucket("staging", { safe: true }).collection("addons").createRecord({
       guid: guid,
@@ -162,7 +196,7 @@ class BlocklistKintoClient extends KintoClient {
   }
 
   async compareAddonCollection(compareWithBucket) {
-    await this.ensureAuthorized();
+    await this.authorize();
 
     let collection = await this.bucket("blocklists").collection("addons");
 
@@ -198,7 +232,7 @@ class BlocklistKintoClient extends KintoClient {
    * @return {string}               The current blocklist status.
    */
   async getBlocklistStatus() {
-    await this.ensureAuthorized();
+    await this.authorize();
     let data = await this.bucket("staging").collection("addons").getData();
     return data.status;
   }
@@ -209,7 +243,7 @@ class BlocklistKintoClient extends KintoClient {
    * @param {string} status     One of the valid collection statii.
    */
   async _updateCollectionStatus(status) {
-    await this.ensureAuthorized();
+    await this.authorize();
     await this.bucket("staging").collection("addons").setData({ status }, { patch: true });
   }
 

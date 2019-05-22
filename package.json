@@ -1,10 +1,11 @@
 {
   "name": "mozblocklist",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Find and add add-ons to the Mozilla blocklist",
   "main": "src/cli.js",
   "dependencies": {
     "ini": "^1.3.5",
+    "keytar": "^4.7.0",
     "kinto-http": "^4.6.1",
     "node-fetch": "^2.3.0",
     "openurl": "^1.1.1",
