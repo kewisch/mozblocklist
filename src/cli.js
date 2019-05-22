@@ -5,12 +5,15 @@
 
 import yargs from "yargs";
 import keytar from "keytar";
-import { AMORedashClient, BMOClient } from "amolib";
+import { AMOSession, AMORedashClient, BMOClient } from "amolib";
 
 import BlocklistKintoClient from "./kinto-client";
 import Mozblocklist from "./mozblocklist";
 import { PUBLIC_HOST, PROD_HOST, STAGE_HOST } from "./constants";
 import { getConfig, CaselessMap } from "./utils";
+
+import path from "path";
+import os from "os";
 
 /**
  * The main program executed when called.
@@ -50,6 +53,10 @@ import { getConfig, CaselessMap } from "./utils";
   let config = getConfig();
 
   let argv = yargs
+    .option("debug", {
+      "boolean": true,
+      "describe": "Enable debugging"
+    })
     .option("H", {
       "alias": "host",
       "default": PUBLIC_HOST,
@@ -167,8 +174,12 @@ import { getConfig, CaselessMap } from "./utils";
   let mozblock = new Mozblocklist({
     kinto: new BlocklistKintoClient(remote, { writer, auth }),
     bugzilla: new BMOClient(config.auth && config.auth.bugzilla_key),
-    redash: new AMORedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug })
+    redash: new AMORedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug }),
+    amo: new AMOSession({ debug: argv.debug })
   });
+
+  // TODO move this to keytar
+  mozblock.amo.loadCookies(path.join(os.homedir(), ".amo_cookie"));
 
   switch (argv._[0]) {
     case "list":

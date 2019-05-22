@@ -4,8 +4,8 @@
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
 import { waitForStdin, waitForInput, bold, getConfig, getSeverity, createGuidString } from "./utils";
-
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
+import { ADDON_STATUS, DjangoUserModels, AddonAdminPage } from "amolib";
 
 /**
  * A map between a string guid and its blocklist data
@@ -36,10 +36,11 @@ import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
  */
 
 export default class Mozblocklist {
-  constructor({ kinto, bugzilla, redash }) {
+  constructor({ kinto, bugzilla, redash, amo }) {
     this.kinto = kinto;
     this.bugzilla = bugzilla;
     this.redash = redash;
+    this.amo = amo;
   }
 
   /**
@@ -635,6 +636,7 @@ export default class Mozblocklist {
       maxVersion = await waitForInput("Maximum version [*]:") || "*";
     }
 
+    let shouldBan = await waitForInput("Ban involved users? [yN]");
     let answer = await waitForInput("Ready to create the blocklist entry? [yN]");
     if (answer == "y") {
       let account = await this.bugzilla.whoami();
@@ -666,7 +668,37 @@ export default class Mozblocklist {
 
       let guidstring = createGuidString(guids);
       let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
-      console.log(`\tDone, see ${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
+      console.log(`Blocklist entry created, see ${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
+
+
+      if (shouldBan == "y") {
+        let users = await this.redash.queryUsersForIds("guid", guids);
+        console.log("Banning these users:");
+        console.log(users.map(user => `\t${user.user_id} (${user.username} - ${user.display_name})`).join("\n"));
+        await waitForInput("Really go ahead? [yN]");
+
+        let usermodels = new DjangoUserModels(this.amo);
+        await usermodels.ban(users.map(user => user.user_id));
+      }
+
+      console.log("Disabling add-on and files");
+      let failedguids = [];
+      for (let guid of guids) {
+        let addonadmin = new AddonAdminPage(this.amo, guid);
+        addonadmin.status = ADDON_STATUS.DISABLED;
+        try {
+          await addonadmin.disableFiles();
+        } catch (e) {
+          failedguids.push(guid);
+        }
+      }
+
+      if (failedguids.length) {
+        console.log("Could not disable the following add-ons:");
+        console.log(failedguids.map(guid => "\t" + guid).join("\n"));
+      } else {
+        console.log("Done");
+      }
     } else {
       console.log("In case you decide to do so later, here is the guid regex:");
       console.log(createGuidString(guids));
