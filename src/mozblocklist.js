@@ -452,7 +452,7 @@ export default class Mozblocklist {
    * @param {boolean} options.useIds              If add-on ids are used instead.
    * @param {integer} options.bug                 The bug to optionally take information from.
    */
-  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], useIds = false, bug = null }) {
+  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], useIds = false, bug = null, allFromUsers = false }) {
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Loading blocklist...");
     }
@@ -478,6 +478,19 @@ export default class Mozblocklist {
       console.warn("Querying guids from AMO-DB via redash");
       let result = await this.redash.queryMapIds("id", "guid", data);
       data = [...Object.values(result)];
+    }
+
+    let otherguids = await this.redash.queryAddonsInvolvedAccounts(data);
+    let alluserguids = [...new Set([...otherguids, ...data])];
+    if (!allFromUsers && alluserguids.length > data.length) {
+      let diff = alluserguids.length - data.length
+      allFromUsers = (await waitForInput(`The users involved have ${diff} more add-ons, also check them? [yN]`) == "y");
+    }
+
+    if (allFromUsers) {
+      // Get other add-ons, lets make absolutely sure the original guids are contained
+      console.warn("Expanding to all add-ons from involved users");
+      data = [...new Set([...otherguids, ...data])];
     }
 
     let { existing, newguids } = this.readGuidData(data, blockguids, blockregexes);

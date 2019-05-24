@@ -47,6 +47,11 @@ import os from "os";
         alias: "bug",
         conflicts: "ids",
         describe: type + " blocks from given bug"
+      })
+      .option("U", {
+        "alias": "user",
+        "boolean": true,
+        "describe": "Include all add-ons by involved users"
       });
   }
 
@@ -193,7 +198,8 @@ import os from "os";
         canContinue: !!argv["continue"],
         guids: argv.guids || [],
         useIds: argv.ids,
-        bug: argv.bug
+        bug: argv.bug,
+        allFromUsers: argv.user
       });
       break;
 
