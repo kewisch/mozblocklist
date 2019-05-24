@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
-import { waitForStdin, waitForInput, bold, getConfig, getSeverity, createGuidString } from "./utils";
+import { waitForStdin, waitForInput, bold, getSeverity, createGuidString } from "./utils";
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
-import { ADDON_STATUS, DjangoUserModels, AddonAdminPage } from "amolib";
+import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig } from "amolib";
 
 /**
  * A map between a string guid and its blocklist data

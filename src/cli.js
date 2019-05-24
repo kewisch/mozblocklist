@@ -5,12 +5,12 @@
 
 import yargs from "yargs";
 import keytar from "keytar";
-import { AMOSession, AMORedashClient, BMOClient } from "amolib";
+import { AMOSession, AMORedashClient, BMOClient, getConfig } from "amolib";
 
 import BlocklistKintoClient from "./kinto-client";
 import Mozblocklist from "./mozblocklist";
 import { PUBLIC_HOST, PROD_HOST, STAGE_HOST } from "./constants";
-import { getConfig, CaselessMap } from "./utils";
+import { CaselessMap } from "./utils";
 
 import path from "path";
 import os from "os";

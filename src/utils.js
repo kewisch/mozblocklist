@@ -5,10 +5,6 @@
 
 import readline from "readline";
 import fs from "fs";
-import os from "os";
-import path from "path";
-
-var gConfigData = null;
 
 /**
  * Escape a string for use in the RegExp constructor.
@@ -80,49 +76,6 @@ export function waitForInput(prompt, lowercase=true) {
  */
 export function bold(text) {
   return `\x1b[1m${text}\x1b[0m`;
-}
-
-/**
- * Read the configuration file, which can either still be an ini file, or a JSON file.
- *
- * @return {Object}         The configuration object.
- */
-function readConfig() {
-  let data;
-  try {
-    data = fs.readFileSync(path.join(os.homedir(), ".amorc"), "utf-8");
-  } catch (e) {
-    return {};
-  }
-
-  if (data[0] == "[") {
-    throw new Error("Your ~/.amorc is still in ini format, you need to convert it to JSON");
-  }
-
-  return JSON.parse(data);
-}
-
-/**
- * Return the configuration data from the file, either by reading it or the cached copy.
- *
- * @param {...string} configpath    The configuration path to look up.
- * @return {Object}                 The configuration object at this path.
- */
-export function getConfig(...configpath) {
-  if (!gConfigData) {
-    gConfigData = readConfig();
-  }
-
-  if (configpath) {
-    let data = gConfigData;
-    while (data && configpath.length) {
-      let next = configpath.shift();
-      data = data[next];
-    }
-    return data;
-  } else {
-    return gConfigData;
-  }
 }
 
 
