@@ -238,6 +238,7 @@ export default class Mozblocklist {
         await this.bugzilla.update({
           ids: bugs,
           comment: { body: `The block has been staged. ${reviewerName}, can you review and push?` },
+          cc: { add: [reviewerEmail] },
           flags: [{
             name: "needinfo",
             status: "?",
