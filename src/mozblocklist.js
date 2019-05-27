@@ -292,7 +292,7 @@ export default class Mozblocklist {
       let bugset = new Set();
       for (let entry of res.data) {
         if (!entry.deleted) {
-          bugs.add(entry.details.bug.match(/id=(\d+)/)[1]);
+          bugset.add(entry.details.bug.match(/id=(\d+)/)[1]);
         }
       }
       let bugs = [...bugset];
