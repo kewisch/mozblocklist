@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
-import { waitForStdin, waitForInput, bold, getSeverity, createGuidString } from "./utils";
+import { waitForStdin, waitForInput, bold, getSeverity, createGuidString, pluralForm } from "./utils";
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig } from "amolib";
 
@@ -598,7 +598,6 @@ export default class Mozblocklist {
     let canned = getConfig("mozblocklist", "canned") || {};
     let reasons = Object.keys(canned);
 
-
     if (bugData) {
       name = await waitForInput(`Name for this block [${bugData.name}]:`, false) || bugData.name;
     } else {
@@ -616,6 +615,8 @@ export default class Mozblocklist {
       } else if (canned.hasOwnProperty(reason)) {
         reason = canned[reason];
         if (reason.kinto && reason.bugzilla) {
+          reason.kinto = pluralForm(guids.length, reason.kinto);
+          reason.bugzilla = pluralForm(guids.length, reason.bugzilla);
           break;
         } else {
           console.log("The reason config seems wrong, it needs both a bugzilla and a kinto key");

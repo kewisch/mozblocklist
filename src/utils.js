@@ -126,3 +126,17 @@ export function createGuidString(guids) {
     return guids[0];
   }
 }
+
+/**
+ * Expand a string into the correct plural form. Only support for plural rule 1, which
+ * includes English.
+ *
+ * @param {number} count        The number of items to expand for.
+ * @param {string} str          The semicolon separated string with the plural rule.
+ * @return {string}             The correct string part based on the number.
+ */
+export function pluralForm(count, str) {
+  // We are only using English anyway, so taking the shortcut
+  let parts = str.split(";");
+  return count == 1 || parts.length < 2 ? parts[0]: parts[1];
+}
