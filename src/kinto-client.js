@@ -9,6 +9,7 @@ import http from "http";
 import { open } from "openurl";
 import { URL, parse as urlparse } from "url";
 import { HARD_BLOCK } from "./constants";
+import { requiresVPN } from "amolib";
 
 /**
  * Blocklisting specific version of the KintoClient
@@ -73,6 +74,8 @@ export default class BlocklistKintoClient extends KintoClient {
     if (this.authorized) {
       return;
     }
+
+    requiresVPN();
 
     // Make sure we are using the writer when doing authenticated requests
     this.remote = this.remote_writer;

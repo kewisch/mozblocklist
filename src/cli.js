@@ -5,7 +5,7 @@
 
 import yargs from "yargs";
 import keytar from "keytar";
-import { AMOSession, AMORedashClient, BMOClient, getConfig } from "amolib";
+import { AMOSession, AMORedashClient, BMOClient, requiresVPN, getConfig } from "amolib";
 
 import BlocklistKintoClient from "./kinto-client";
 import Mozblocklist from "./mozblocklist";
@@ -192,6 +192,8 @@ import os from "os";
       break;
 
     case "create":
+      requiresVPN();
+      // Fallthrough intended
     case "check":
       await mozblock.checkGuidsInteractively({
         create: argv._[0] == "create",
@@ -204,6 +206,7 @@ import os from "os";
       break;
 
     case "pending":
+      requiresVPN();
       if (argv.guids) {
         await mozblock.displayPendingGuids(argv.wip ? "staging" : "blocklists-preview");
       } else {
@@ -212,6 +215,7 @@ import os from "os";
       break;
 
     case "status":
+      requiresVPN();
       await mozblock.printBlocklistStatus();
       break;
     case "review":
