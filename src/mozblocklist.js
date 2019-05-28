@@ -233,7 +233,7 @@ export default class Mozblocklist {
         if (bugs.length < pending.data.length) {
           console.warn(`${pending.data.length - bugs.length} bugs already have a request for review`);
         }
-        console.warn("Requesting review from ${reviewerName} for the following bugs:");
+        console.warn(`Requesting review from ${reviewerName} for the following bugs:`);
         for (let bug of bugs) {
           console.warn("\thttps://bugzilla.mozilla.org/show_bug.cgi?id=" + bug);
         }
@@ -591,7 +591,7 @@ export default class Mozblocklist {
       }
 
       if (bugid) {
-        bugData = await parseBlocklistBug(bugid);
+        bugData = await this.parseBlocklistBug(bugid);
       }
     }
 
