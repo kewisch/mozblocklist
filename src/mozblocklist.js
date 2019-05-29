@@ -484,23 +484,26 @@ export default class Mozblocklist {
       data = [...Object.values(result)];
     }
 
-    let otherguids = await this.redash.queryAddonsInvolvedAccounts(data);
-    let alluserguids = [...new Set([...otherguids, ...data])];
-    if (!allFromUsers && alluserguids.length > data.length) {
-      let diff = alluserguids.length - data.length
-      allFromUsers = (await waitForInput(`The users involved have ${diff} more add-ons, also check them? [yN]`) == "y");
+    let alluserguids = await this.redash.queryAddonsInvolvedAccounts(data);
+    let currentguidset = new Set(data);
+    let otherguidset = new Set(alluserguids.filter(guid => !currentguidset.has(guid)));
+
+    if (!allFromUsers && otherguidset.size > 0) {
+      allFromUsers = (await waitForInput(`The users involved have ${otherguidset.size} more add-ons, also check them? [yN]`) == "y");
     }
 
     if (allFromUsers) {
       // Get other add-ons, lets make absolutely sure the original guids are contained
-      console.warn("Expanding to all add-ons from involved users");
-      data = [...new Set([...otherguids, ...data])];
+      data = [...new Set([...alluserguids, ...currentguidset])];
+      console.log("");
+      console.log(bold("The following add-ons were added because the user is involved:"));
+      console.log([...otherguidset].join("\n"));
     }
 
     let { existing, newguids } = this.readGuidData(data, blockguids, blockregexes);
     let newguidvalues = [...newguids.values()];
 
-    console.warn("");
+    console.log("");
 
     // Show existing guids for information
     if (existing.size) {
