@@ -495,9 +495,6 @@ export default class Mozblocklist {
     if (allFromUsers) {
       // Get other add-ons, lets make absolutely sure the original guids are contained
       data = [...new Set([...alluserguids, ...currentguidset])];
-      console.log("");
-      console.log(bold("The following add-ons were added because the user is involved:"));
-      console.log([...otherguidset].join("\n"));
     }
 
     let { existing, newguids } = this.readGuidData(data, blockguids, blockregexes);
@@ -510,7 +507,14 @@ export default class Mozblocklist {
       console.log(bold("The following guids are already blocked:"));
       for (let [guid, entry] of existing.entries()) {
         console.log(`${guid} - ${entry.details.bug}`);
+        otherguidset.delete(guid);
       }
+      console.log("");
+    }
+
+    if (allFromUsers) {
+      console.log(bold("The following add-ons were added because the user is involved:"));
+      console.log([...otherguidset].join("\n"));
       console.log("");
     }
 
