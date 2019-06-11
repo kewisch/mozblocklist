@@ -5,7 +5,7 @@
 
 import { waitForStdin, waitForInput, bold, getSeverity, createGuidString, pluralForm } from "./utils";
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
-import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig } from "amolib";
+import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
 /**
  * A map between a string guid and its blocklist data
@@ -453,10 +453,9 @@ export default class Mozblocklist {
    * @param {boolean} options.create              If true, creation will also be prompted.
    * @param {boolean} options.canContinue         Also create the entry if there are work in progress items.
    * @param {string[]} options.guids              The guids to check, can be empty.
-   * @param {boolean} options.useIds              If add-on ids are used instead.
    * @param {integer} options.bug                 The bug to optionally take information from.
    */
-  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], useIds = false, bug = null, allFromUsers = false }) {
+  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false }) {
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Loading blocklist...");
     }
@@ -478,10 +477,18 @@ export default class Mozblocklist {
       data = await waitForStdin();
     }
 
-    if (useIds) {
-      console.warn("Querying guids from AMO-DB via redash");
-      let result = await this.redash.queryMapIds("id", "guid", data);
-      data = [...Object.values(result)];
+    let type = detectIdType(data);
+    switch (type) {
+      case "id":
+      case "slug": {
+        console.warn(`Converting ${type}s to guids`);
+        let result = await this.redash.queryMapIds(type, "guid", data);
+        data = [...Object.values(result)];
+        break;
+      }
+      case "mixed":
+        console.error("The ids passed could not be clearly identified. Are these all exclusively guids or ids?");
+        return;
     }
 
     let alluserguids = await this.redash.queryAddonsInvolvedAccounts(data);

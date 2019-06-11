@@ -33,11 +33,6 @@ import os from "os";
       type: "string",
     })
       .default("guids", [], "<from stdin>")
-      .option("i", {
-        "alias": "ids",
-        "boolean": true,
-        "describe": "Take add-on ids instead of guids"
-      })
       .option("c", {
         "alias": "continue",
         "boolean": true,
@@ -45,7 +40,6 @@ import os from "os";
       })
       .option("B", {
         alias: "bug",
-        conflicts: "ids",
         describe: type + " blocks from given bug"
       })
       .option("U", {
@@ -199,7 +193,6 @@ import os from "os";
         create: argv._[0] == "create",
         canContinue: !!argv["continue"],
         guids: argv.guids || [],
-        useIds: argv.ids,
         bug: argv.bug,
         allFromUsers: argv.user
       });
