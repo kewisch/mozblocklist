@@ -460,7 +460,7 @@ export default class Mozblocklist {
       console.warn("Loading blocklist...");
     }
 
-    let [blockguids, blockregexes] = await this.kinto.loadBlocklist();
+    let [blockguids, blockregexes] = await this.kinto.loadBlocklist("staging");
 
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");

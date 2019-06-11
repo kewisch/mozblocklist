@@ -133,8 +133,11 @@ export default class BlocklistKintoClient extends KintoClient {
   /**
    * Load the blocklist from the blocklists/addons collection.
    */
-  async loadBlocklist() {
-    let addons = await this.bucket("blocklists").collection("addons").listRecords();
+  async loadBlocklist(bucket="blocklists") {
+    if (bucket != "blocklists") {
+      await this.authorize();
+    }
+    let addons = await this.bucket(bucket).collection("addons").listRecords();
 
     let guids = new Map();
     let regexes = new Map();
