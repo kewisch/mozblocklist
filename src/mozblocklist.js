@@ -389,7 +389,7 @@ export default class Mozblocklist {
     let comments = pending.data.length ? await this.getCommentsSince(bugData) : {};
 
     for (let entry of pending.data) {
-      console.log(`Entry ${entry.id} - ${entry.deleted ? "deleted" : entry.details.name}`);
+      console.log(bold(`Entry ${entry.id} - ${entry.deleted ? "deleted" : entry.details.name}`));
       if (!entry.enabled) {
         console.log("\tWarning: The blocklist entry is marked disabled");
       }
@@ -436,6 +436,7 @@ export default class Mozblocklist {
           }
         }
       }
+      console.log("");
     }
 
     if (!pending.data.length) {
