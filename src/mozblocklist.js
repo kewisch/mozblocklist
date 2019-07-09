@@ -281,7 +281,7 @@ export default class Mozblocklist {
   async signBlocklist(pending=null) {
     let removeSecurityGroup = false;
     if (this.bugzilla.authenticated) {
-      removeSecurityGroup = await waitForInput("Remove blocklist-requests security group? [yN]");
+      removeSecurityGroup = (await waitForInput("Remove blocklist-requests security group? [yN]") == "y");
     }
 
     console.warn("Signing blocklist...");
