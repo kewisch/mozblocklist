@@ -713,24 +713,25 @@ export default class Mozblocklist {
         let usermodels = new DjangoUserModels(this.amo);
         await usermodels.ban(users.map(user => user.user_id));
       }
-
-      console.log("Disabling add-on and files");
-      let failedguids = [];
-      for (let guid of guids) {
-        let addonadmin = new AddonAdminPage(this.amo, guid);
-        addonadmin.status = ADDON_STATUS.DISABLED;
-        try {
-          await addonadmin.disableFiles();
-        } catch (e) {
-          failedguids.push(guid);
+      else {
+        console.log("Disabling add-on and files");
+        let failedguids = [];
+        for (let guid of guids) {
+          let addonadmin = new AddonAdminPage(this.amo, guid);
+          addonadmin.status = ADDON_STATUS.DISABLED;
+          try {
+            await addonadmin.disableFiles();
+          } catch (e) {
+            failedguids.push(guid);
+          }
         }
-      }
 
-      if (failedguids.length) {
-        console.log("Could not disable the following add-ons:");
-        console.log(failedguids.map(guid => "\t" + guid).join("\n"));
-      } else {
-        console.log("Done");
+        if (failedguids.length) {
+          console.log("Could not disable the following add-ons:");
+          console.log(failedguids.map(guid => "\t" + guid).join("\n"));
+        } else {
+          console.log("Done");
+        }
       }
     } else {
       console.log("In case you decide to do so later, here is the guid regex:");
