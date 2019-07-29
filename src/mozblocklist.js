@@ -319,9 +319,9 @@ export default class Mozblocklist {
       };
 
       if (selfsign) {
-        bugdata.comment = { body: "The block has been pushed" };
+        bugdata.comment = { body: "The block has been pushed." };
       } else {
-        bugdata.comment = { body: "Done" };
+        bugdata.comment = { body: "Done." };
         bugdata.flags = [{
           name: "needinfo",
           status: "X"
