@@ -316,7 +316,21 @@ export default class Mozblocklist {
       if (removeSecurityGroup) {
         bugdata.groups = { remove: ["blocklist-requests"] };
       }
-      await this.bugzilla.update(bugdata);
+
+      try {
+        await this.bugzilla.update(bugdata);
+      } catch (e) {
+        if (e.response &&
+            e.response.statusCode == 401 &&
+            e.response.body &&
+            e.response.body.code == 120) {
+          // Removing the group failed, probably not allowed or already removed.
+          delete bugdata.groups;
+          await this.bugzilla.update(bugdata);
+        } else {
+          throw e;
+        }
+      }
 
       console.warn("Done");
     } else if (bugs.length) {
