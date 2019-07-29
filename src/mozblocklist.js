@@ -224,7 +224,7 @@ export default class Mozblocklist {
       if (hasReviewer) {
         let bugset = new Set();
         for (let entry of pending.data) {
-          if (!entry._alreadyRequestedBlock && entry.details) {
+          if (!entry._alreadyRequestedBlock && entry.details && entry.details.bug) {
             bugset.add(entry.details.bug.match(/id=(\d+)/)[1]);
           }
         }
@@ -280,7 +280,15 @@ export default class Mozblocklist {
    */
   async signBlocklist(pending=null) {
     let removeSecurityGroup = false;
-    if (this.bugzilla.authenticated) {
+
+    let bugset = new Set();
+    for (let entry of res.data) {
+      if (!entry.deleted && entry.details.bug) {
+        bugset.add(entry.details.bug.match(/id=(\d+)/)[1]);
+      }
+    }
+    let bugs = [...bugset];
+    if (this.bugzilla.authenticated && bugs.length) {
       removeSecurityGroup = (await waitForInput("Remove blocklist-requests security group? [yN]") == "y");
     }
 
@@ -288,15 +296,7 @@ export default class Mozblocklist {
     let res = pending || await this.kinto.getBlocklistPreview();
     await this.kinto.signBlocklist();
 
-    if (this.bugzilla.authenticated) {
-      let bugset = new Set();
-      for (let entry of res.data) {
-        if (!entry.deleted) {
-          bugset.add(entry.details.bug.match(/id=(\d+)/)[1]);
-        }
-      }
-      let bugs = [...bugset];
-
+    if (this.bugzilla.authenticated && bugs.length) {
       console.warn("Marking the following bugs as FIXED:");
       for (let bug of bugs) {
         console.warn("\thttps://bugzilla.mozilla.org/show_bug.cgi?id=" + bug);
@@ -319,7 +319,7 @@ export default class Mozblocklist {
       await this.bugzilla.update(bugdata);
 
       console.warn("Done");
-    } else {
+    } else if (bugs.length) {
       let bugurls = res.data.map(entry => entry.details.bug);
       console.warn("You don't have a bugzilla API key configured. Set one in ~/.amorc or visit" +
                    " these bugs manually:");
@@ -381,7 +381,7 @@ export default class Mozblocklist {
     let pending = await this.kinto.compareAddonCollection(compareWith);
     let bugData = {};
     for (let entry of pending.data) {
-      if (!entry.deleted) {
+      if (!entry.deleted && entry.details.bug) {
         bugData[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
       }
     }
@@ -398,7 +398,9 @@ export default class Mozblocklist {
 
       if (!entry.deleted) {
         console.log("\tReason: " + entry.details.why);
-        console.log("\tBug: " + entry.details.bug);
+        if (entry.details.bug) {
+          console.log("\tBug: " + entry.details.bug);
+        }
         if (entry.versionRange.length == 1 &&
             entry.versionRange[0].minVersion == "0" &&
             entry.versionRange[0].maxVersion == "*") {
@@ -425,7 +427,7 @@ export default class Mozblocklist {
           console.log("Prefs: ", entry.prefs);
         }
 
-        let bugId = entry.details.bug.match(/id=(\d+)/)[1];
+        let bugId = entry.details.bug && entry.details.bug.match(/id=(\d+)/)[1];
         if (bugId in comments) {
           console.log("\tComments since the block was staged:");
           for (let comment of comments[bugId]) {
@@ -514,7 +516,7 @@ export default class Mozblocklist {
     if (existing.size) {
       console.log(bold("The following guids are already blocked:"));
       for (let [guid, entry] of existing.entries()) {
-        console.log(`${guid} - ${entry.details.bug}`);
+        console.log(`${guid} - ${entry.details.bug || "no bug"}`);
         otherguidset.delete(guid);
       }
       console.log("");
