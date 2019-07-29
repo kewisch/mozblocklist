@@ -36,8 +36,9 @@ import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType
  */
 
 export default class Mozblocklist {
-  constructor({ kinto, bugzilla, redash, amo }) {
+  constructor({ kinto, kintoapprover, bugzilla, redash, amo }) {
     this.kinto = kinto;
+    this.kintoapprover = kintoapprover;
     this.bugzilla = bugzilla;
     this.redash = redash;
     this.amo = amo;
@@ -69,7 +70,7 @@ export default class Mozblocklist {
         let regexmatches = [...regexes.keys()].filter(re => guid.match(re));
         if (regexmatches.length) {
           if (regexmatches.length > 1) {
-            console.error(`Warning: ${guid} appears in more than one regex block: ${regexmatches}`);
+            // console.error(`Warning: ${guid} appears in more than one regex block: ${regexmatches}`);
           }
           let entry = regexes.get(regexmatches[0]);
           existing.set(guid, entry);
@@ -259,26 +260,32 @@ export default class Mozblocklist {
 
   /**
    * Show blocks in the preview list and then sign after asking.
+   *
+   * @param {Object} options                    The options for this function.
+   * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
    */
-  async reviewAndSignBlocklist() {
+  async reviewAndSignBlocklist({ selfsign=false }) {
     let pending = await this.displayPending();
     if (pending.data.length) {
-      let ready = await waitForInput("Ready to sign? [yN] ");
+      let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
       if (ready == "y") {
-        await this.signBlocklist(pending);
+        await this.signBlocklist({ pending, selfsign });
       }
     } else {
-      console.log("No stagd blocks");
+      console.log("No staged blocks");
     }
   }
 
   /**
    * Sign the blocklist, pushing the block.
    *
-   * @param {?Object} pending                   The pending blocklist data in case it was retrieved
+   * @param {Object} options                    The options for this function.
+   * @param {?Object} options.pending           The pending blocklist data in case it was retrieved
    *                                              before.
+   * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
    */
-  async signBlocklist(pending=null) {
+  async signBlocklist({ pending=null, selfsign=false }) {
+    let res = pending || await this.kinto.getBlocklistPreview();
     let removeSecurityGroup = false;
 
     let bugset = new Set();
@@ -293,8 +300,11 @@ export default class Mozblocklist {
     }
 
     console.warn("Signing blocklist...");
-    let res = pending || await this.kinto.getBlocklistPreview();
-    await this.kinto.signBlocklist();
+    if (selfsign) {
+      await this.kintoapprover.signBlocklist();
+    } else {
+      await this.kinto.signBlocklist();
+    }
 
     if (this.bugzilla.authenticated && bugs.length) {
       console.warn("Marking the following bugs as FIXED:");
@@ -304,14 +314,19 @@ export default class Mozblocklist {
 
       let bugdata = {
         ids: bugs,
-        comment: { body: "Done" },
-        flags: [{
-          name: "needinfo",
-          status: "X"
-        }],
         resolution: "FIXED",
         status: "RESOLVED"
       };
+
+      if (selfsign) {
+        bugdata.comment = { body: "The block has been pushed" };
+      } else {
+        bugdata.comment = { body: "Done" };
+        bugdata.flags = [{
+          name: "needinfo",
+          status: "X"
+        }];
+      }
 
       if (removeSecurityGroup) {
         bugdata.groups = { remove: ["blocklist-requests"] };
@@ -348,7 +363,12 @@ export default class Mozblocklist {
    * @return {Promise<Object<number,string[]>>} Map between bug id and comments.
    */
   async getCommentsSince(data) {
-    let res = await this.bugzilla.getComments(Object.keys(data));
+    let bugs = Object.keys(data);
+    if (!bugs.length) {
+      return {};
+    }
+
+    let res = await this.bugzilla.getComments(bugs);
     let comments = {};
     for (let [id, entry] of Object.entries(res.bugs)) {
       comments[id] = [];
@@ -472,7 +492,7 @@ export default class Mozblocklist {
    * @param {string[]} options.guids              The guids to check, can be empty.
    * @param {integer} options.bug                 The bug to optionally take information from.
    */
-  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false }) {
+  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false, selfsign = false }) {
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Loading blocklist...");
     }
@@ -548,7 +568,7 @@ export default class Mozblocklist {
       console.log(newguidvalues.join("\n"));
 
       if (create) {
-        await this.createBlocklistEntryInteractively(newguidvalues, canContinue, bugData);
+        await this.createBlocklistEntryInteractively({ newguidvalues, canContinue, bugData, selfsign });
       } else {
         console.log("");
         console.log(bold("Here is the list of guids for kinto:"));
@@ -591,11 +611,13 @@ export default class Mozblocklist {
    * Prompt for information required to create a blocklist entry and create it. This requires the
    * blocklist to be clean and not work in progress.
    *
-   * @param {string[]} guids                The guid strings for the blocklist entry.
-   * @param {boolean} canContinue           Also create the entry if there are work in progress items.
-   * @param {BlocklistBugData} bugData      The data from the blocklist bug for names and reasons.
+   * @param {Object} options                    The options for this function.
+   * @param {string[]} options.guids            The guid strings for the blocklist entry.
+   * @param {boolean} options.canContinue       Also create the entry if there are work in progress items.
+   * @param {BlocklistBugData} options.bugData  The data from the blocklist bug for names and reasons.
+   * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
    */
-  async createBlocklistEntryInteractively(guids, canContinue=false, bugData=null) {
+  async createBlocklistEntryInteractively({ guids, canContinue=false, bugData=null, selfsign=false }) {
     let requestedStates = ["signed"];
     if (canContinue) {
       requestedStates.push("work-in-progress", "to-review");
@@ -719,6 +741,10 @@ export default class Mozblocklist {
       let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
       console.log(`Blocklist entry created, see ${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
 
+
+      if (selfsign) {
+        await this.signBlocklist({ selfsign });
+      }
 
       if (shouldBan == "y") {
         let users = await this.redash.queryUsersForIds("guid", guids);

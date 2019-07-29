@@ -4,10 +4,10 @@
  * Portions Copyright (C) Philipp Kewisch, 2018-2019 */
 
 import yargs from "yargs";
-import keytar from "keytar";
 import { AMOSession, AMORedashClient, BMOClient, requiresVPN, getConfig } from "amolib";
 
 import BlocklistKintoClient from "./kinto-client";
+import { KintoBasicAuth, KintoOAuth, KeytarAuthStore } from "./kinto-auth";
 import Mozblocklist from "./mozblocklist";
 import { PUBLIC_HOST, PROD_HOST, STAGE_HOST } from "./constants";
 import { CaselessMap } from "./utils";
@@ -73,8 +73,18 @@ import os from "os";
       "conflicts": "writer",
       "describe": "Use the stage writer instead of the production writer"
     })
-    .command("check [guids..]", "Find out what entries already exist in the blocklist", checkCreateCommand.bind(null, "check"))
-    .command("create [guids..]", "Stage a block for a set of guids", checkCreateCommand.bind(null, "create"))
+    .command("check [guids..]", "Find out what entries already exist in the blocklist", (subyargs) => {
+      checkCreateCommand("check", subyargs);
+    })
+    .command("create [guids..]", "Stage a block for a set of guids", (subyargs) => {
+      checkCreateCommand("create", subyargs);
+
+      subyargs.option("S", {
+        "alias": "selfsign",
+        "boolean": true,
+        "describe": "Self-sign the entry using the shared key"
+      });
+    })
     .command("list", "Display the blocklist in different ways", (subyargs) => {
       subyargs.option("f", {
         "alias": "format",
@@ -134,7 +144,13 @@ import os from "os";
           "describe": "Show pending guids instead of the full block"
         });
     })
-    .command("sign", "Sign pending blocklist entries after verification")
+    .command("sign", "Sign pending blocklist entries after verification", (subyargs) => {
+      subyargs.option("S", {
+        "alias": "selfsign",
+        "boolean": true,
+        "describe": "Self-sign the entry using the shared key"
+      });
+    })
     .command("reject", "Reject a pending blocklist review")
     .example("echo guid@example.com | $0 check", "Check if guid@example.com is in the blocklist")
     .example("echo 1285960 | $0 check -i", "The same, but check for the AMO id of the add-on")
@@ -155,23 +171,15 @@ import os from "os";
     remote = `https://${argv.host}/v1`;
   }
 
-
-  let auth = {
-    get: async function() {
-      return keytar.getPassword("mozblocklist", "oauth");
-    },
-
-    set: async function(header) {
-      return keytar.setPassword("mozblocklist", "oauth", header);
-    },
-
-    remove: async function() {
-      return keytar.deletePassword("mozblocklist", "oauth");
-    }
-  };
-
   let mozblock = new Mozblocklist({
-    kinto: new BlocklistKintoClient(remote, { writer, auth }),
+    kinto: new BlocklistKintoClient(remote, {
+      writer: writer,
+      auth: new KintoOAuth(new KeytarAuthStore("mozblocklist", "oauth")),
+    }),
+    kintoapprover: new BlocklistKintoClient(remote, {
+      writer: writer,
+      auth: new KintoBasicAuth(new KeytarAuthStore("mozblocklist", "basic")),
+    }),
     bugzilla: new BMOClient(config.auth && config.auth.bugzilla_key),
     redash: new AMORedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug }),
     amo: new AMOSession({ debug: argv.debug })
@@ -194,7 +202,8 @@ import os from "os";
         canContinue: !!argv["continue"],
         guids: argv.guids || [],
         bug: argv.bug,
-        allFromUsers: argv.user
+        allFromUsers: argv.user,
+        selfsign: argv.selfsign
       });
       break;
 
@@ -215,7 +224,7 @@ import os from "os";
       await mozblock.reviewBlocklist(argv.reviewer[0], argv.reviewer[1]);
       break;
     case "sign":
-      await mozblock.reviewAndSignBlocklist();
+      await mozblock.reviewAndSignBlocklist({ selfsign: argv.selfsign });
       break;
     case "reject":
       await mozblock.kinto.rejectBlocklist();

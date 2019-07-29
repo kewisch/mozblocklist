@@ -4,12 +4,9 @@
  * Portions Copyright (C) Philipp Kewisch, 2018-2019 */
 
 import KintoClient from "kinto-http";
-import querystring from "querystring";
-import http from "http";
-import { open } from "openurl";
-import { URL, parse as urlparse } from "url";
 import { HARD_BLOCK } from "./constants";
 import { requiresVPN } from "amolib";
+import { KintoBasicAuth, MemoryAuthStore } from "./kinto-auth";
 
 /**
  * Blocklisting specific version of the KintoClient
@@ -36,7 +33,7 @@ export default class BlocklistKintoClient extends KintoClient {
       this.remote_writer = writer;
     }
     this.remote_reader = remote;
-    this.auth = auth || { get: () => {}, set: () => {} };
+    this.auth = auth || new KintoBasicAuth(new MemoryAuthStore());
 
     let request = this.http.request.bind(this.http);
     this.http.request = this.httpRequest.bind(this, request);
@@ -87,43 +84,7 @@ export default class BlocklistKintoClient extends KintoClient {
       return;
     }
 
-    let server = http.createServer();
-
-    // Spin up a http server for the OAuth callback
-    let port = await new Promise((resolve) => {
-      server.listen({
-        port: 0,
-        host: "127.0.0.1",
-        exclusive: true,
-      }, () => resolve(server.address().port));
-    });
-
-    // Open the URL in the browser to trigger authentication
-    let authURL = new URL("/v1/openid/ldap/login?" + querystring.stringify({
-      callback: `http://127.0.0.1:${port}/mozblocklist?token=`,
-      scope: "openid email"
-    }), this.remote);
-    open(authURL);
-
-    // Wait for the response from the browser and shut down the http server
-    let response = await new Promise((resolve) => {
-      server.on("request", (req, res) => {
-        let query = urlparse(req.url, true).query;
-        if (query.token) {
-          let token = Buffer.from(query.token, "base64").toString("ascii");
-          let tokendata = JSON.parse(token);
-          res.end("OK");
-          resolve(tokendata);
-        } else {
-          res.writeHead(404, { "Content-Type": "text/plain" });
-          res.end("404 Not Found");
-        }
-      });
-    });
-
-    server.close();
-
-    let auth = `${response.token_type} ${response.access_token}`;
+    let auth = await this.auth.negotiate(this.remote);
     this.setHeaders({ Authorization: auth });
     await this.auth.set(auth);
 
@@ -132,6 +93,8 @@ export default class BlocklistKintoClient extends KintoClient {
 
   /**
    * Load the blocklist from the blocklists/addons collection.
+   *
+   * @param {string} bucket     The bucket to load the blocklist from.
    */
   async loadBlocklist(bucket="blocklists") {
     if (bucket != "blocklists") {
