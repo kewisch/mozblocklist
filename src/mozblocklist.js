@@ -285,6 +285,16 @@ export default class Mozblocklist {
    * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
    */
   async signBlocklist({ pending=null, selfsign=false }) {
+    console.warn("Signing blocklist...");
+    if (selfsign) {
+      if (await this.kinto.getBlocklistStatus() === "work-in-progress") {
+        await this.kinto.reviewBlocklist();
+      }
+      await this.kintoapprover.signBlocklist();
+    } else {
+      await this.kinto.signBlocklist();
+    }
+
     let res = pending || await this.kinto.getBlocklistPreview();
     let removeSecurityGroup = false;
 
@@ -297,16 +307,6 @@ export default class Mozblocklist {
     let bugs = [...bugset];
     if (this.bugzilla.authenticated && bugs.length) {
       removeSecurityGroup = (await waitForInput("Remove blocklist-requests security group? [yN]") == "y");
-    }
-
-    console.warn("Signing blocklist...");
-    if (selfsign) {
-      if (await this.kinto.getBlocklistStatus() === "work-in-progress") {
-        await this.kinto.reviewBlocklist();
-      }
-      await this.kintoapprover.signBlocklist();
-    } else {
-      await this.kinto.signBlocklist();
     }
 
     if (this.bugzilla.authenticated && bugs.length) {
