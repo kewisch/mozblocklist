@@ -568,7 +568,7 @@ export default class Mozblocklist {
       console.log(newguidvalues.join("\n"));
 
       if (create) {
-        await this.createBlocklistEntryInteractively({ newguidvalues, canContinue, bugData, selfsign });
+        await this.createBlocklistEntryInteractively({ guids: newguidvalues, canContinue, bugData, selfsign });
       } else {
         console.log("");
         console.log(bold("Here is the list of guids for kinto:"));
