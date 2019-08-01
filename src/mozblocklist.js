@@ -301,6 +301,9 @@ export default class Mozblocklist {
 
     console.warn("Signing blocklist...");
     if (selfsign) {
+      if (await this.kinto.getBlocklistStatus() === "work-in-progress") {
+        await this.kinto.reviewBlocklist();
+      }
       await this.kintoapprover.signBlocklist();
     } else {
       await this.kinto.signBlocklist();
