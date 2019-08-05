@@ -226,6 +226,8 @@ import os from "os";
     case "sign":
       await mozblock.reviewAndSignBlocklist({ selfsign: argv.selfsign });
       break;
+    case "test":
+      break;
     case "reject":
       await mozblock.kinto.rejectBlocklist();
       break;

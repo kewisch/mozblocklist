@@ -281,12 +281,35 @@ export default class Mozblocklist {
    *
    * @param {Object} options                    The options for this function.
    * @param {?Object} options.pending           The pending blocklist data in case it was retrieved
-   *                                              before.
+   *                                              before. This data will not be used when
+   *                                              self-reviewing and self-signing at the same time.
    * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
+   * @param {boolean} options.selfreview        If true, staged entries will be submitted for
+   *                                              review.
    */
-  async signBlocklist({ pending=null, selfsign=false }) {
-    let res = pending || await this.kinto.getBlocklistPreview();
+  async signBlocklist({ pending=null, selfsign=false, selfreview=false }) {
     let removeSecurityGroup = false;
+    if (this.bugzilla.authenticated) {
+      removeSecurityGroup = (await waitForInput("Remove blocklist-requests security group? [yN]") == "y");
+    }
+
+    if (selfsign && selfreview && pending) {
+      throw new Error("Don't pass pending when self-signing and self-reviewing");
+    }
+
+    let res;
+    if (selfsign) {
+      if (selfreview) {
+        await this.kinto.reviewBlocklist();
+        res = await this.kinto.getBlocklistPreview();
+      } else {
+        res = pending || await this.kinto.getBlocklistPreview();
+      }
+      await this.kintoapprover.signBlocklist();
+    } else {
+      res = pending || await this.kinto.getBlocklistPreview();
+      await this.kinto.signBlocklist();
+    }
 
     let bugset = new Set();
     for (let entry of res.data) {
@@ -295,16 +318,6 @@ export default class Mozblocklist {
       }
     }
     let bugs = [...bugset];
-    if (this.bugzilla.authenticated && bugs.length) {
-      removeSecurityGroup = (await waitForInput("Remove blocklist-requests security group? [yN]") == "y");
-    }
-
-    console.warn("Signing blocklist...");
-    if (selfsign) {
-      await this.kintoapprover.signBlocklist();
-    } else {
-      await this.kinto.signBlocklist();
-    }
 
     if (this.bugzilla.authenticated && bugs.length) {
       console.warn("Marking the following bugs as FIXED:");
@@ -741,9 +754,8 @@ export default class Mozblocklist {
       let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
       console.log(`Blocklist entry created, see ${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
 
-
       if (selfsign) {
-        await this.signBlocklist({ selfsign });
+        await this.signBlocklist({ selfsign, selfreview: true });
       }
 
       if (shouldBan == "y") {
@@ -754,8 +766,7 @@ export default class Mozblocklist {
 
         let usermodels = new DjangoUserModels(this.amo);
         await usermodels.ban(users.map(user => user.user_id));
-      }
-      else {
+      } else {
         console.log("Disabling add-on and files");
         let failedguids = [];
         for (let guid of guids) {
