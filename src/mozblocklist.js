@@ -286,16 +286,18 @@ export default class Mozblocklist {
    */
   async signBlocklist({ pending=null, selfsign=false }) {
     console.warn("Signing blocklist...");
+    let res = pending;
     if (selfsign) {
       if (await this.kinto.getBlocklistStatus() === "work-in-progress") {
         await this.kinto.reviewBlocklist();
       }
+      res = res || await this.kinto.getBlocklistPreview();
       await this.kintoapprover.signBlocklist();
     } else {
+      res = res || await this.kinto.getBlocklistPreview();
       await this.kinto.signBlocklist();
     }
 
-    let res = pending || await this.kinto.getBlocklistPreview();
     let removeSecurityGroup = false;
 
     let bugset = new Set();
