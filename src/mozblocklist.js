@@ -735,6 +735,10 @@ export default class Mozblocklist {
         let versions = minVersion == "0" && maxVersion == "*" ? "<all versions>" : `${minVersion} - ${maxVersion}`;
         let description = this.compileDescription(name, versions, reason.bugzilla, severity, guids, additionalInfo);
 
+        if (this.bugzilla.readonly) {
+          throw new Error("Bugzilla is set to read-only, cannot create bug");
+        }
+
         bugid = await this.bugzilla.create({
           product: "Toolkit",
           component: "Blocklist Policy Requests",
