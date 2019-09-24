@@ -9,7 +9,7 @@ import { requiresVPN } from "amolib";
 import { KintoBasicAuth, MemoryAuthStore } from "./kinto-auth";
 
 /**
- * Blocklisting specific version of the KintoClient
+ * Blocklisting specific version of the KintoClient.
  */
 export default class BlocklistKintoClient extends KintoClient {
   /**
@@ -94,7 +94,8 @@ export default class BlocklistKintoClient extends KintoClient {
   /**
    * Load the blocklist from the blocklists/addons collection.
    *
-   * @param {string} bucket     The bucket to load the blocklist from.
+   * @param {string} bucket                         The bucket to load the blocklist from.
+   * @return  {[BlocklistMap, BlocklistRegexMap]}   The guids and regexes.
    */
   async loadBlocklist(bucket="blocklists") {
     if (bucket != "blocklists") {

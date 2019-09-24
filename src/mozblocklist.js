@@ -8,29 +8,31 @@ import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
 /**
- * A map between a string guid and its blocklist data
- * @typedef {Map<string,Object>} BlocklistMap
+ * A map between a string guid and its blocklist data.
+ *
+ * @typedef {Map<string, object>} BlocklistMap
  */
 
 /**
- * A map between regex guids and its blocklist data
- * @typedef {Map<RegExp,Object>} BlocklistRegexMap
+ * A map between regex guids and its blocklist data.
+ *
+ * @typedef {Map<RegExp, object>} BlocklistRegexMap
  */
 
 /**
  * Blocklist bug data.
  *
- * @typedef {Object} BlocklistBugData
- * @property {integer} id                   The bug id
- * @property {string} name                  The extension name, from the block
- * @proeprty {string} reason                The first line of the reason field
- * @property {string[]} guids               The array of guids to block
+ * @typedef {object} BlocklistBugData
+ * @property {integer} id                   The bug id.
+ * @property {string} name                  The extension name, from the block.
+ * @property {string} reason                The first line of the reason field.
+ * @property {string[]} guids               The array of guids to block.
  */
 
 /**
  * Existing and new guids object.
  *
- * @typedef {Object} GuidData
+ * @typedef {object} GuidData
  * @property {BlocklistMap} existing        The existing guids.
  * @property {Set<string>} newguids         The new guids.
  */
