@@ -261,7 +261,7 @@ export default class Mozblocklist {
   /**
    * Show blocks in the preview list and then sign after asking.
    *
-   * @param {Object} options                    The options for this function.
+   * @param {object} options                    The options for this function.
    * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
    */
   async reviewAndSignBlocklist({ selfsign=false }) {
@@ -279,8 +279,8 @@ export default class Mozblocklist {
   /**
    * Sign the blocklist, pushing the block.
    *
-   * @param {Object} options                    The options for this function.
-   * @param {?Object} options.pending           The pending blocklist data in case it was retrieved
+   * @param {object} options                    The options for this function.
+   * @param {?object} options.pending           The pending blocklist data in case it was retrieved
    *                                              before. This data will not be used when
    *                                              self-reviewing and self-signing at the same time.
    * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
@@ -372,8 +372,8 @@ export default class Mozblocklist {
   /**
    * Get bugzilla comments since a certain date.
    *
-   * @param {Object<number,Date>} data          Map between bug id and date.
-   * @return {Promise<Object<number,string[]>>} Map between bug id and comments.
+   * @param {object<number, Date>} data          Map between bug id and date.
+   * @return {Promise<object<number, Array<string>>>} Map between bug id and comments.
    */
   async getCommentsSince(data) {
     let bugs = Object.keys(data);
@@ -422,7 +422,7 @@ export default class Mozblocklist {
    *
    * @param {string} compareWith                The collection to compare with. This is usually
    *                                              blocklists-preview or staging.
-   * @return {Object}                          Pending blocklist data from kinto.
+   * @return {object}                          Pending blocklist data from kinto.
    */
   async displayPending(compareWith="blocklists-preview") {
     let pending = await this.kinto.compareAddonCollection(compareWith);
@@ -499,7 +499,7 @@ export default class Mozblocklist {
    * Check for guids provided in stdin if they are in the blocklist, optionally creating the blocklist
    * entry. This will start the interactive workflow.
    *
-   * @param {Object} options                    The options for this call, see following.
+   * @param {object} options                    The options for this call, see following.
    * @param {boolean} options.create              If true, creation will also be prompted.
    * @param {boolean} options.canContinue         Also create the entry if there are work in progress items.
    * @param {string[]} options.guids              The guids to check, can be empty.
@@ -624,7 +624,7 @@ export default class Mozblocklist {
    * Prompt for information required to create a blocklist entry and create it. This requires the
    * blocklist to be clean and not work in progress.
    *
-   * @param {Object} options                    The options for this function.
+   * @param {object} options                    The options for this function.
    * @param {string[]} options.guids            The guid strings for the blocklist entry.
    * @param {boolean} options.canContinue       Also create the entry if there are work in progress items.
    * @param {BlocklistBugData} options.bugData  The data from the blocklist bug for names and reasons.

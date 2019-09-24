@@ -25,7 +25,7 @@ import os from "os";
    * The yargs handler function for the check and create commands. The type argument should be bound.
    *
    * @param {string} type       The type of command (check/create).
-   * @param {Object} subyargs   The yargs object.
+   * @param {object} subyargs   The yargs object.
    */
   function checkCreateCommand(type, subyargs) {
     subyargs.positional("guids", {
