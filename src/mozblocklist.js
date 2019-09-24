@@ -743,6 +743,7 @@ export default class Mozblocklist {
           description: description,
           whiteboard: "[extension]",
           status: "ASSIGNED",
+          type: "task",
           assigned_to: account.name,
           groups: ["blocklist-requests"]
         });
