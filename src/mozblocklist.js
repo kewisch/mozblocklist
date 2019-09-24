@@ -269,7 +269,15 @@ export default class Mozblocklist {
     if (pending.data.length) {
       let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
       if (ready == "y") {
-        await this.signBlocklist({ pending, selfsign });
+        await this.signBlocklist({ pending, selfsign, selfreview: selfsign });
+      }
+    } else if (selfsign) {
+      pending = await this.displayPending("staging");
+      if (pending.data.length) {
+        let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
+        if (ready == "y") {
+          await this.signBlocklist({ selfsign: true, selfreview: true });
+        }
       }
     } else {
       console.log("No staged blocks");
@@ -486,10 +494,6 @@ export default class Mozblocklist {
         }
       }
       console.log("");
-    }
-
-    if (!pending.data.length) {
-      console.log("No blocks pending");
     }
 
     return pending;
