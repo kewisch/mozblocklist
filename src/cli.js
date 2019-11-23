@@ -185,7 +185,7 @@ import os from "os";
       writer: writer,
       auth: new KintoBasicAuth(new KeytarAuthStore("mozblocklist", "basic")),
     }),
-    bugzilla: new BMOClient(config.auth && config.auth.bugzilla_key, config, !argv.bugzilla),
+    bugzilla: new BMOClient(config.auth && config.auth.bugzilla_key, !argv.bugzilla),
     redash: new AMORedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug }),
     amo: new AMOSession({ debug: argv.debug })
   });
