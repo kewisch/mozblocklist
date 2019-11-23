@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
+import { SingleBar, Presets } from "cli-progress";
 import { waitForStdin, waitForInput, bold, getSeverity, createGuidString, pluralForm } from "./utils";
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
@@ -796,6 +797,10 @@ export default class Mozblocklist {
 
   async disableAddonAndFiles(guids) {
     let failedguids = [];
+    let format = "Disabling add-ons [{bar}] {percentage}% | ETA: {eta_formatted} | {value}/{total}";
+    let bar = new SingleBar({ format }, Presets.legacy);
+    bar.start(guids.length, 0);
+
     for (let guid of guids) {
       let addonadmin = new AddonAdminPage(this.amo, guid);
 
@@ -808,7 +813,9 @@ export default class Mozblocklist {
       } catch (e) {
         failedguids.push(guid);
       }
+      bar.increment();
     }
+    bar.stop();
 
     return failedguids;
   }

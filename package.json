@@ -5,6 +5,7 @@
   "main": "src/loader.js",
   "dependencies": {
     "amolib": "kewisch/amolib",
+    "cli-progress": "^3.4.0",
     "esm": "^3.2.25",
     "keytar": "^4.13.0",
     "kinto-http": "^4.7.3",
