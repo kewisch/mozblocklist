@@ -779,19 +779,7 @@ export default class Mozblocklist {
         await usermodels.ban(users.map(user => user.user_id));
       } else {
         console.log("Disabling add-on and files");
-        let failedguids = [];
-        for (let guid of guids) {
-          let addonadmin = new AddonAdminPage(this.amo, guid);
-          await addonadmin.ensureLoaded();
-          if (addonadmin.status !== ADDON_STATUS.DELETED) {
-            addonadmin.status = ADDON_STATUS.DISABLED;
-          }
-          try {
-            await addonadmin.disableFiles();
-          } catch (e) {
-            failedguids.push(guid);
-          }
-        }
+        let failedguids = await this.disableAddonAndFiles(guids);
 
         if (failedguids.length) {
           console.log("Could not disable the following add-ons:");
@@ -804,6 +792,25 @@ export default class Mozblocklist {
       console.log("In case you decide to do so later, here is the guid regex:");
       console.log(createGuidString(guids));
     }
+  }
+
+  async disableAddonAndFiles(guids) {
+    let failedguids = [];
+    for (let guid of guids) {
+      let addonadmin = new AddonAdminPage(this.amo, guid);
+
+      try {
+        await addonadmin.ensureLoaded();
+        if (addonadmin.status != ADDON_STATUS.DELETED) {
+          addonadmin.status = ADDON_STATUS.DISABLED;
+        }
+        await addonadmin.disableAllFiles();
+      } catch (e) {
+        failedguids.push(guid);
+      }
+    }
+
+    return failedguids;
   }
 
   /**
