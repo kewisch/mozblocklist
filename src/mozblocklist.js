@@ -782,7 +782,10 @@ export default class Mozblocklist {
         let failedguids = [];
         for (let guid of guids) {
           let addonadmin = new AddonAdminPage(this.amo, guid);
-          addonadmin.status = ADDON_STATUS.DISABLED;
+          addonadmin.ensureLoaded();
+          if (addonadmin.status !== ADDON_STATUS.DELETED) {
+            addonadmin.status = ADDON_STATUS.DISABLED;
+          }
           try {
             await addonadmin.disableFiles();
           } catch (e) {
