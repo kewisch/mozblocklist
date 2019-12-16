@@ -4,7 +4,7 @@
  * Portions Copyright (C) Philipp Kewisch, 2018-2019 */
 
 import yargs from "yargs";
-import { AMOSession, AMORedashClient, BMOClient, requiresVPN, getConfig } from "amolib";
+import { AMOSession, AMORedashClient, TelemetryRedashClient, BMOClient, requiresVPN, getConfig } from "amolib";
 
 import BlocklistKintoClient from "./kinto-client";
 import { KintoBasicAuth, KintoOAuth, KeytarAuthStore } from "./kinto-auth";
@@ -41,6 +41,11 @@ import os from "os";
       .option("B", {
         alias: "bug",
         describe: type + " blocks from given bug"
+      })
+      .options("u", {
+        "alias": "usage",
+        "boolean": true,
+        "describe": "Show usage information"
       })
       .option("U", {
         "alias": "user",
@@ -187,6 +192,7 @@ import os from "os";
     }),
     bugzilla: new BMOClient(config.auth && config.auth.bugzilla_key, !argv.bugzilla),
     redash: new AMORedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug }),
+    redash_telemetry: new TelemetryRedashClient({ apiToken: config.auth && config.auth.redash_key, debug: argv.debug }),
     amo: new AMOSession({ debug: argv.debug })
   });
 
@@ -207,6 +213,7 @@ import os from "os";
         canContinue: !!argv["continue"],
         guids: argv.guids || [],
         bug: argv.bug,
+        showUsage: argv.usage,
         allFromUsers: argv.user,
         selfsign: argv.selfsign
       });

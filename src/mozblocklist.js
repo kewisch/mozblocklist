@@ -39,11 +39,12 @@ import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType
  */
 
 export default class Mozblocklist {
-  constructor({ kinto, kintoapprover, bugzilla, redash, amo }) {
+  constructor({ kinto, kintoapprover, bugzilla, redash, redash_telemetry, amo }) {
     this.kinto = kinto;
     this.kintoapprover = kintoapprover;
     this.bugzilla = bugzilla;
     this.redash = redash;
+    this.redash_telemetry = redash_telemetry;
     this.amo = amo;
   }
 
@@ -512,7 +513,7 @@ export default class Mozblocklist {
    * @param {string[]} options.guids              The guids to check, can be empty.
    * @param {integer} options.bug                 The bug to optionally take information from.
    */
-  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false, selfsign = false }) {
+  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false, selfsign = false, showUsage = false }) {
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Loading blocklist...");
     }
@@ -598,8 +599,19 @@ export default class Mozblocklist {
 
     // Show a list of new guids that can be blocked
     if (newguidvalues.length > 0) {
+      let usage = showUsage && await this.redash_telemetry.queryUsage(newguidvalues);
+
       console.log(bold("Here is a list of all guids not yet blocked:"));
-      console.log(newguidvalues.join("\n"));
+      if (usage) {
+        console.log(newguidvalues.map(guid => `${guid} - ${usage[guid] || "unknown"}`).join("\n"));
+      } else {
+        console.log(newguidvalues.join("\n"));
+      }
+
+      let totalUsers = usage ? Object.values(usage).reduce((acc, users) => users + acc, 0) : 0;
+      if (totalUsers > 0) {
+        console.log("\n" + bold("Total users: ") + totalUsers);
+      }
 
       if (create) {
         await this.createBlocklistEntryInteractively({ guids: newguidvalues, canContinue, bugData, selfsign });
