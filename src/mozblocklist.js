@@ -5,7 +5,7 @@
 
 import { SingleBar, Presets } from "cli-progress";
 import { waitForStdin, waitForInput, bold, getSeverity, createGuidString, pluralForm } from "./utils";
-import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK } from "./constants";
+import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK, DECIMAL_FORMAT } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
 /**
@@ -206,11 +206,13 @@ export default class Mozblocklist {
   /**
    * Send work in progress blocks to review.
    *
-   * @param {string} reviewerName               The reviewer's name (e.g. First name).
-   * @param {string} reviewerEmail              The reviewer's email.
+   * @param {object} options                    The options for this function.
+   * @param {string} options.reviewerName       The reviewer's name (e.g. First name).
+   * @param {string} options.reviewerEmail      The reviewer's email.
+   * @param {string} options.showUsage          Show usage information.
    */
-  async reviewBlocklist(reviewerName, reviewerEmail) {
-    let pending = await this.displayPending("staging");
+  async reviewBlocklist({ reviewerName, reviewerEmail, showUsage }) {
+    let pending = await this.displayPending({ compareWith: "staging", showUsage });
     if (!pending.data.length) {
       console.log("No blocks are in progress");
       return;
@@ -267,16 +269,17 @@ export default class Mozblocklist {
    *
    * @param {object} options                    The options for this function.
    * @param {boolean} options.selfsign          If true, signing will occur using the shared key.
+   * @param {boolean} options.showUsage         If true, usage information will be shown.
    */
-  async reviewAndSignBlocklist({ selfsign=false }) {
-    let pending = await this.displayPending();
+  async reviewAndSignBlocklist({ selfsign=false, showUsage=false }) {
+    let pending = await this.displayPending({ showUsage });
     if (pending.data.length) {
       let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
       if (ready == "y") {
         await this.signBlocklist({ pending, selfsign, selfreview: selfsign });
       }
     } else if (selfsign) {
-      pending = await this.displayPending("staging");
+      pending = await this.displayPending({ compareWith: "staging", showUsage });
       if (pending.data.length) {
         let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
         if (ready == "y") {
@@ -436,14 +439,21 @@ export default class Mozblocklist {
    *                                              blocklists-preview or staging.
    * @return {object}                          Pending blocklist data from kinto.
    */
-  async displayPending(compareWith="blocklists-preview") {
+  async displayPending({ compareWith="blocklists-preview", showUsage=false }) {
     let pending = await this.kinto.compareAddonCollection(compareWith);
     let bugData = {};
+    let singleGuids = [];
     for (let entry of pending.data) {
       if (!entry.deleted && entry.details.bug) {
         bugData[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
       }
+
+      if (!entry.guid.startsWith("/")) {
+        singleGuids.push(entry.guid);
+      }
     }
+
+    let usage = showUsage && singleGuids.length && await this.redash_telemetry.queryUsage(singleGuids);
 
     let comments = pending.data.length ? await this.getCommentsSince(bugData) : {};
 
@@ -480,6 +490,9 @@ export default class Mozblocklist {
           }
         } else {
           console.log("\tGUID: " + entry.guid);
+          if (showUsage) {
+            console.log("\tUsers: " + DECIMAL_FORMAT.format(usage[entry.guid]));
+          }
         }
 
         if (entry.prefs.length) {
@@ -603,14 +616,17 @@ export default class Mozblocklist {
 
       console.log(bold("Here is a list of all guids not yet blocked:"));
       if (usage) {
-        console.log(newguidvalues.map(guid => `${guid} - ${usage[guid] || "unknown"}`).join("\n"));
+        console.log(newguidvalues.map(guid => {
+          let usageString = usage[guid] ? DECIMAL_FORMAT.format(usage[guid]) : "unknown";
+          return `${guid} - ${usageString}`;
+        }).join("\n"));
       } else {
         console.log(newguidvalues.join("\n"));
       }
 
       let totalUsers = usage ? Object.values(usage).reduce((acc, users) => users + acc, 0) : 0;
       if (totalUsers > 0) {
-        console.log("\n" + bold("Total users: ") + totalUsers);
+        console.log("\n" + bold("Total users: ") + DECIMAL_FORMAT.format(totalUsers));
       }
 
       if (create) {

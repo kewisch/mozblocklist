@@ -140,7 +140,12 @@ import os from "os";
           return reviewer;
         },
         "describe": "A reviewer alias from ~/.amorc that will review and push the block, or the name and email of the reviewer"
-      });
+      })
+        .options("u", {
+          "alias": "usage",
+          "boolean": true,
+          "describe": "Show usage information"
+        });
     })
     .command("pending", "Show blocklist entries pending for signature", (subyargs) => {
       subyargs.option("w", {
@@ -159,7 +164,12 @@ import os from "os";
         "alias": "selfsign",
         "boolean": true,
         "describe": "Self-sign the entry using the shared key"
-      });
+      })
+        .options("u", {
+          "alias": "usage",
+          "boolean": true,
+          "describe": "Show usage information"
+        });
     })
     .command("reject", "Reject a pending blocklist review")
     .example("echo guid@example.com | $0 check", "Check if guid@example.com is in the blocklist")
@@ -224,7 +234,7 @@ import os from "os";
       if (argv.guids) {
         await mozblock.displayPendingGuids(argv.wip ? "staging" : "blocklists-preview");
       } else {
-        await mozblock.displayPending(argv.wip ? "staging" : "blocklists-preview");
+        await mozblock.displayPending({ compareWith: argv.wip ? "staging" : "blocklists-preview" });
       }
       break;
 
@@ -233,10 +243,14 @@ import os from "os";
       await mozblock.printBlocklistStatus();
       break;
     case "review":
-      await mozblock.reviewBlocklist(argv.reviewer[0], argv.reviewer[1]);
+      await mozblock.reviewBlocklist({
+        reviewerName: argv.reviewer[0],
+        reviewerEmail:  argv.reviewer[1],
+        showUsage: argv.usage
+      });
       break;
     case "sign":
-      await mozblock.reviewAndSignBlocklist({ selfsign: argv.selfsign });
+      await mozblock.reviewAndSignBlocklist({ selfsign: argv.selfsign, showUsage: argv.usage });
       break;
     case "test":
       break;
