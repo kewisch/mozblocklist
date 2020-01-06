@@ -127,7 +127,7 @@ export function createGuidStrings(guids) {
     let blocks = [];
     let current = [];
     let curlen = 0;
-    let overhead = REGEX_GUID_DELIM.length;
+    let overhead = REGEX_BLOCK_DELIM.length;
 
     for (let guid of guids) {
       let escaped = regexEscape(guid);
