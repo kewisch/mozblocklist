@@ -156,20 +156,25 @@ export default class Mozblocklist {
   /**
    * Display the blocklist in various formats.
    *
-   * @param {string} format                     The format, json or sql.
-   * @param {boolean} loadAllGuids              For the SQL format, load guids from the AMO database
-   *                                              instead of stdin.
+   * @param {string} format           The format, json or sql.
+   * @param {boolean} loadAllGuids    For the SQL format, load guids from the AMO database
+   *                                    instead of stdin.
+   * @param {string} bucket           The bucket to read from
+   *                                    (staging/blocklists-preview/blocklists).
    */
-  async displayBlocklist(format="json", loadAllGuids=false) {
+  async displayBlocklist(format="json", loadAllGuids=false, bucket="blocklists") {
     if (format == "json") {
       console.warn("Loading blocklist...");
-      let addons = await this.kinto.bucket("blocklists").collection("addons").listRecords();
+      if (bucket != "blocklists") {
+        await this.kinto.authorize();
+      }
+      let addons = await this.kinto.bucket(bucket).collection("addons").listRecords();
       console.log(JSON.stringify(addons, null, 2));
     } else if (format == "sql") {
       if (process.stdin.isTTY) {
         console.warn("Loading blocklist...");
       }
-      let [blockguids, blockregexes] = await this.kinto.loadBlocklist();
+      let [blockguids, blockregexes] = await this.kinto.loadBlocklist(bucket);
 
       let data;
       if (loadAllGuids) {

@@ -108,6 +108,12 @@ import os from "os";
           "boolean": true,
           "describe": "Retrieve all guids from redash when using the sql output format"
         })
+        .option("b", {
+          "alias": "bucket",
+          "default": "blocklists",
+          "choices": ["blocklists", "blocklists-preview", "staging"],
+          "describe": "The bucket to display"
+        })
         .epilog(
           "The 'json' output will show the raw blocklist.\n\n" +
         "The 'sql' output will take a list of guids on stdin (or use the -a option) and show SQL" +
@@ -211,7 +217,7 @@ import os from "os";
 
   switch (argv._[0]) {
     case "list":
-      await mozblock.displayBlocklist(argv.format, argv.all || false);
+      await mozblock.displayBlocklist(argv.format, argv.all || false, argv.bucket);
       break;
 
     case "create":
