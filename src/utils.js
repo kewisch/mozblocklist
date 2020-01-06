@@ -6,6 +6,8 @@
 import readline from "readline";
 import fs from "fs";
 
+import { REGEX_BLOCK_MAXLEN, REGEX_BLOCK_START, REGEX_BLOCK_END, REGEX_BLOCK_DELIM } from "./constants";
+
 /**
  * Escape a string for use in the RegExp constructor.
  *
@@ -114,16 +116,39 @@ export function getSeverity(severity) {
 }
 
 /**
- * Create the kinto guid string, so string with regex or a simple uuid.
+ * Create kinto guid strings, up to the maximum length we support since bug 1604655. For a single
+ * guid this will be an array with just the guid.
  *
  * @param {string[]} guids      The array of guids.
- * @return {string}             The compiled guid string.
+ * @return {string[]}           The array of compiled guid strings.
  */
-export function createGuidString(guids) {
+export function createGuidStrings(guids) {
   if (guids.length > 1) {
-    return "/^((" + guids.map(regexEscape).join(")|(") + "))$/";
+    let blocks = [];
+    let current = [];
+    let curlen = 0;
+    let overhead = REGEX_GUID_DELIM.length;
+
+    for (let guid of guids) {
+      let escaped = regexEscape(guid);
+      curlen += escaped.length + overhead;
+
+      if (curlen > REGEX_BLOCK_MAXLEN) {
+        blocks.push(current);
+        current = [];
+        curlen = escaped.length + overhead;
+      }
+      current.push(escaped);
+    }
+    blocks.push(current);
+
+    return blocks.map(block => {
+      return REGEX_BLOCK_START +
+        block.join(REGEX_BLOCK_DELIM) +
+        REGEX_BLOCK_END;
+    });
   } else {
-    return guids[0];
+    return [guids[0]];
   }
 }
 

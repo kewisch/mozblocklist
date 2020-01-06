@@ -4,7 +4,7 @@
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
 import { SingleBar, Presets } from "cli-progress";
-import { waitForStdin, waitForInput, bold, getSeverity, createGuidString, pluralForm } from "./utils";
+import { waitForStdin, waitForInput, bold, getSeverity, createGuidStrings, pluralForm } from "./utils";
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK, DECIMAL_FORMAT } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
@@ -809,9 +809,16 @@ export default class Mozblocklist {
         console.log(`Created https://bugzilla.mozilla.org/show_bug.cgi?id=${bugid} for this entry`);
       }
 
-      let guidstring = createGuidString(guids);
-      let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
-      console.log(`Blocklist entry created, see ${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
+      let blocks = createGuidStrings(guids);
+      let logblockprefix = blocks.length > 1 ? "\t": "Blocklist entry created, see ";
+      if (blocks.length > 1) {
+        console.log(`Splitting guids into ${blocks.length} blocklist entries:`);
+      }
+
+      for (let guidstring of blocks) {
+        let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
+        console.log(`${logblockprefix}${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
+      }
 
       if (selfsign) {
         await this.signBlocklist({ selfsign, selfreview: true });

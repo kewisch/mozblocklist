@@ -20,3 +20,8 @@ export const REDASH_URL = "https://sql.telemetry.mozilla.org/";
 export const REDASH_AMO_DB = 25;
 
 export const DECIMAL_FORMAT = new Intl.NumberFormat("en-US", { style: "decimal" });
+
+export const REGEX_BLOCK_MAXLEN = 4250;
+export const REGEX_BLOCK_START = "/^((";
+export const REGEX_BLOCK_DELIM = ")|(";
+export const REGEX_BLOCK_END = "))$/";
