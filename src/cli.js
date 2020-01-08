@@ -85,6 +85,12 @@ import os from "os";
     })
     .command("check [guids..]", "Find out what entries already exist in the blocklist", (subyargs) => {
       checkCreateCommand("check", subyargs);
+      subyargs.option("b", {
+        "alias": "bucket",
+        "default": "blocklists",
+        "choices": ["blocklists", "blocklists-preview", "staging"],
+        "describe": "The bucket to compare against."
+      });
     })
     .command("create [guids..]", "Stage a block for a set of guids", (subyargs) => {
       checkCreateCommand("create", subyargs);
@@ -93,7 +99,13 @@ import os from "os";
         "alias": "selfsign",
         "boolean": true,
         "describe": "Self-sign the entry using the shared key"
-      });
+      })
+        .option("b", {
+          "alias": "bucket",
+          "default": "staging",
+          "choices": ["blocklists", "blocklists-preview", "staging"],
+          "describe": "The bucket to compare against."
+        });
     })
     .command("list", "Display the blocklist in different ways", (subyargs) => {
       subyargs.option("f", {
@@ -231,7 +243,8 @@ import os from "os";
         bug: argv.bug,
         showUsage: argv.usage,
         allFromUsers: argv.user,
-        selfsign: argv.selfsign
+        selfsign: argv.selfsign,
+        bucket: argv.bucket
       });
       break;
 

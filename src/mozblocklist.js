@@ -530,13 +530,15 @@ export default class Mozblocklist {
    * @param {boolean} options.canContinue         Also create the entry if there are work in progress items.
    * @param {string[]} options.guids              The guids to check, can be empty.
    * @param {integer} options.bug                 The bug to optionally take information from.
+   * @param {string} options.bucket             The bucket to read from
+   *                                              (staging/blocklists-preview/blocklists).
    */
-  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false, selfsign = false, showUsage = false }) {
+  async checkGuidsInteractively({ create = false, canContinue = false, guids = [], bug = null, allFromUsers = false, selfsign = false, showUsage = false, bucket = "blocklists" }) {
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Loading blocklist...");
     }
 
-    let [blockguids, blockregexes] = await this.kinto.loadBlocklist("staging");
+    let [blockguids, blockregexes] = await this.kinto.loadBlocklist(bucket);
 
     if (process.stdin.isTTY && !guids.length && !bug) {
       console.warn("Blocklist loaded, waiting for guids (one per line, Ctrl+D to finish)");
