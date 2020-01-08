@@ -641,7 +641,7 @@ export default class Mozblocklist {
       } else {
         console.log("");
         console.log(bold("Here is the list of guids for kinto:"));
-        console.log(createGuidString(newguidvalues));
+        console.log(createGuidStrings(newguidvalues).join("\n"));
       }
     } else {
       console.log("Nothing new to block");
@@ -846,8 +846,8 @@ export default class Mozblocklist {
         }
       }
     } else {
-      console.log("In case you decide to do so later, here is the guid regex:");
-      console.log(createGuidString(guids));
+      console.log("In case you decide to do so later, here are the guid regexes:");
+      console.log(createGuidStrings(guids).join("\n"));
     }
   }
 
