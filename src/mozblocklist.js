@@ -4,8 +4,8 @@
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
 import { SingleBar, Presets } from "cli-progress";
-import { waitForStdin, waitForInput, bold, getSeverity, createGuidStrings, pluralForm } from "./utils";
-import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK, DECIMAL_FORMAT } from "./constants";
+import { waitForStdin, waitForInput, bold, colored, getSeverity, createGuidStrings, expandGuidRegex, pluralForm } from "./utils";
+import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK, DECIMAL_FORMAT, HIGH_NUMBER_OF_USERS } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
 /**
@@ -448,17 +448,26 @@ export default class Mozblocklist {
     let pending = await this.kinto.compareAddonCollection(compareWith);
     let bugData = {};
     let singleGuids = [];
+    let regexToGuids = {};
     for (let entry of pending.data) {
       if (!entry.deleted && entry.details.bug) {
         bugData[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
       }
 
-      if (!entry.guid.startsWith("/")) {
-        singleGuids.push(entry.guid);
-      }
+      let guids = expandGuidRegex(entry.guid);
+      singleGuids = singleGuids.concat(guids);
+      regexToGuids[entry.guid] = guids;
     }
 
-    let usage = showUsage && singleGuids.length && await this.redash_telemetry.queryUsage(singleGuids);
+    let usage = 0;
+    if (showUsage && singleGuids.length) {
+      usage = await this.redash_telemetry.queryUsage(singleGuids);
+      let missing = singleGuids.filter(guid => !(guid in usage));
+      if (missing.length) {
+        console.log(bold("Usage numbers for the following guids were not found:"));
+        console.log("\t" + missing.join("\n\t") + "\n");
+      }
+    }
 
     let comments = pending.data.length ? await this.getCommentsSince(bugData) : {};
 
@@ -486,18 +495,24 @@ export default class Mozblocklist {
           }
         }
         if (entry.guid.startsWith("/")) {
-          try {
-            // eslint-disable-next-line no-new
-            new RegExp(entry.guid.substring(1, entry.guid.length - 1));
-            console.log("\tGUIDs (valid): " + entry.guid);
-          } catch (e) {
-            console.log("\tGUIDs (INVALID): " + entry.guid);
+          if (regexToGuids[entry.guid] && regexToGuids[entry.guid].length) {
+            try {
+              // eslint-disable-next-line no-new
+              new RegExp(entry.guid.substring(1, entry.guid.length - 1));
+              console.log("\tGUIDs (valid): " + entry.guid);
+            } catch (e) {
+              console.log(colored(colored.RED, "\tGUIDs (INVALID, regex doesn't parse): " + entry.guid));
+            }
+          } else {
+            console.log(colored(colored.RED, "\tGUIDs (INVALID, could not split): " + entry.guid));
           }
         } else {
           console.log("\tGUID: " + entry.guid);
-          if (showUsage) {
-            console.log("\tUsers: " + DECIMAL_FORMAT.format(usage[entry.guid]));
-          }
+        }
+
+        if (showUsage) {
+          let users = regexToGuids[entry.guid].reduce((acc, guid) => acc + (usage[guid] || 0), 0);
+          console.log(colored(users > HIGH_NUMBER_OF_USERS ? colored.RED : colored.BLACK, "\tUsers: " + DECIMAL_FORMAT.format(users)));
         }
 
         if (entry.prefs.length) {

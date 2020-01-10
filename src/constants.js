@@ -25,3 +25,6 @@ export const REGEX_BLOCK_MAXLEN = 4250;
 export const REGEX_BLOCK_START = "/^((";
 export const REGEX_BLOCK_DELIM = ")|(";
 export const REGEX_BLOCK_END = "))$/";
+
+// When signing, blocks with more than this amount of users will be highlighted red
+export const HIGH_NUMBER_OF_USERS = 100000;

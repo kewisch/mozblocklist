@@ -8,6 +8,54 @@ import fs from "fs";
 
 import { REGEX_BLOCK_MAXLEN, REGEX_BLOCK_START, REGEX_BLOCK_END, REGEX_BLOCK_DELIM } from "./constants";
 
+/*
+ * The following code is from https://searchfox.org/mozilla-central/source/toolkit/mozapps/extensions/Blocklist.jsm
+ */
+
+// The whole ID should be surrounded by literal ().
+// IDs may contain alphanumerics, _, -, {}, @ and a literal '.'
+// They may also contain backslashes (needed to escape the {} and dot)
+// We filter out backslash escape sequences (like `\w`) separately
+// (see kEscapeSequences).
+const kIdSubRegex =
+  "\\([" +
+  "\\\\" + // note: just a backslash, but between regex and string it needs escaping.
+  "\\w .{}@-]+\\)";
+
+// prettier-ignore
+// Find regular expressions of the form:
+// /^((id1)|(id2)|(id3)|...|(idN))$/
+// The outer set of parens enclosing the entire list of IDs is optional.
+const kIsMultipleIds = new RegExp(
+  // Start with literal sequence /^(
+  //  (the `(` is optional)
+  "^/\\^\\(?" +
+    // Then at least one ID in parens ().
+    kIdSubRegex +
+    // Followed by any number of IDs in () separated by pipes.
+    // Note: using a non-capturing group because we don't care about the value.
+    "(?:\\|" + kIdSubRegex + ")*" +
+  // Finally, we need to end with literal sequence )$/
+  //  (the leading `)` is optional like at the start)
+  "\\)?\\$/$"
+);
+
+// Check for a backslash followed by anything other than a literal . or curlies
+const kEscapeSequences = /\\[^.{}]/;
+
+// Used to remove the following 3 things:
+// leading literal /^(
+//    plus an optional (
+// any backslash
+// trailing literal )$/
+//    plus an optional ) before the )$/
+const kRegExpRemovalRegExp = /^\/\^\(\(?|\\|\)\)?\$\/$/g;
+
+/*
+ * End code from Blocklist.jsm
+ */
+
+
 /**
  * Escape a string for use in the RegExp constructor.
  *
@@ -80,6 +128,24 @@ export function bold(text) {
   return `\x1b[1m${text}\x1b[0m`;
 }
 
+/**
+ * Make the text colored in some way.
+ *
+ * @param {string} color    Color constant, e.g. Colored.RED.
+ * @param {string} text     The string to color.
+ * @return {string}         The colored text.
+ */
+export function colored(color, text) {
+  return `\x1b[0;${color}m${text}\x1b[0m`;
+}
+colored.BLACK = 30;
+colored.RED = 31;
+colored.GREEN = 32;
+colored.YELLOW = 33;
+colored.BLUE = 34;
+colored.MAGENTA = 35;
+colored.CYAN = 36;
+
 
 export class CaselessMap extends Map {
   constructor(iterable) {
@@ -149,6 +215,26 @@ export function createGuidStrings(guids) {
     });
   } else {
     return [guids[0]];
+  }
+}
+
+/**
+ * Extracts guids from the regex we commonly use for blocks.
+ *
+ * @param {string} str        The regex string to expand.
+ * @return {string[]}         The expanded guids.
+ */
+export function expandGuidRegex(str) {
+  if (!str.startsWith("/")) {
+    return [str];
+  }
+
+  if (kIsMultipleIds.test(str) && !kEscapeSequences.test(str)) {
+    // Remove the regexp gunk at the start and end of the string, as well
+    // as all backslashes, and split by )|( to leave the list of IDs.
+    return [...new Set(str.replace(kRegExpRemovalRegExp, "").split(")|("))];
+  } else {
+    return [];
   }
 }
 
