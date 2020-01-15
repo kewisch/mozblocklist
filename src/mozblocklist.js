@@ -454,9 +454,11 @@ export default class Mozblocklist {
         bugData[entry.details.bug.match(/id=(\d+)/)[1]] = new Date(entry.last_modified);
       }
 
-      let guids = expandGuidRegex(entry.guid);
-      singleGuids = singleGuids.concat(guids);
-      regexToGuids[entry.guid] = guids;
+      if (entry.guid) {
+        let guids = expandGuidRegex(entry.guid);
+        singleGuids = singleGuids.concat(guids);
+        regexToGuids[entry.guid] = guids;
+      }
     }
 
     let usage = 0;
