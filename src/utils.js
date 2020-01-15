@@ -118,6 +118,29 @@ export function waitForInput(prompt, lowercase=true) {
   });
 }
 
+
+/**
+ * Wait for input on a question on stdin, validating the response. The input will be trimmed.
+ *
+ * @param {string} prompt               The prompt to show.
+ * @param {string} valid                Valid characters for the reply, e.g. "yn".
+ * @param {boolean} [lowercase=true]    If the result should be made lowercase.
+ * @return {Promise<string>}            The string result with the answer.
+ */
+export async function waitForValidInput(prompt, valid, lowercase=true) {
+  let answer;
+  while (true) {
+    answer = await waitForInput(prompt + ` [${valid}]`, lowercase);
+
+    if (answer.length == 1 && valid.toLowerCase().indexOf(answer.toLowerCase()) > -1) {
+      break;
+    } else {
+      console.log(`Expected [${valid}], got ${answer}`);
+    }
+  }
+  return answer;
+}
+
 /**
  * Make the text bold for output on the terminal.
  *

@@ -4,7 +4,7 @@
  * Portions Copyright (C) Philipp Kewisch, 2019 */
 
 import { SingleBar, Presets } from "cli-progress";
-import { waitForStdin, waitForInput, bold, colored, getSeverity, createGuidStrings, expandGuidRegex, pluralForm } from "./utils";
+import { waitForStdin, waitForInput, waitForValidInput, bold, colored, getSeverity, createGuidStrings, expandGuidRegex, pluralForm } from "./utils";
 import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK, DECIMAL_FORMAT, HIGH_NUMBER_OF_USERS } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
@@ -223,12 +223,8 @@ export default class Mozblocklist {
       return;
     }
     let hasReviewer = this.bugzilla.authenticated && reviewerName && reviewerEmail;
-    let answer;
-    if (hasReviewer) {
-      answer = await waitForInput(`Ready to request review from ${reviewerName}? [yN]`);
-    } else {
-      answer = await waitForInput("Ready to request review? [yN]");
-    }
+    let reviewFrom = hasReviewer ? " from " + reviewerName : "";
+    let answer = await waitForValidInput(`Ready to request review${reviewFrom}?`, "yn");
 
     if (answer == "y") {
       await this.kinto.reviewBlocklist();
@@ -279,14 +275,14 @@ export default class Mozblocklist {
   async reviewAndSignBlocklist({ selfsign=false, showUsage=false }) {
     let pending = await this.displayPending({ showUsage });
     if (pending.data.length) {
-      let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
+      let ready = await waitForValidInput(`Ready to ${selfsign ? "self-" : ""}sign?`, "yn");
       if (ready == "y") {
         await this.signBlocklist({ pending, selfsign, selfreview: selfsign });
       }
     } else if (selfsign) {
       pending = await this.displayPending({ compareWith: "staging", showUsage });
       if (pending.data.length) {
-        let ready = await waitForInput(`Ready to ${selfsign ? "self-" : ""}sign? [yN]`);
+        let ready = await waitForValidInput(`Ready to ${selfsign ? "self-" : ""}sign?`, "yn");
         if (ready == "y") {
           await this.signBlocklist({ selfsign: true, selfreview: true });
         }
@@ -794,7 +790,8 @@ export default class Mozblocklist {
     }
 
     let shouldBan = await waitForInput("Ban involved users? [yN]");
-    let answer = await waitForInput("Ready to create the blocklist entry? [yN]");
+    let answer = await waitForValidInput("Ready to create the blocklist entry?", "yn");
+
     if (answer == "y") {
       let account = await this.bugzilla.whoami();
       if (bugid) {
