@@ -599,7 +599,6 @@ export default class Mozblocklist {
     let newguidvalues = [...newguids.values()];
 
     // Show legacy add-ons
-    console.log(this.redash, Object.keys(this.redash), this.redash.queryAddonsInvolvedAccounts);
     let [wx, legacy, invalid] = await this.redash.querySeprateLegacyAndWX(newguidvalues);
     newguidvalues = wx;
     if (legacy.length) {
