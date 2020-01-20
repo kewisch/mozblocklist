@@ -598,17 +598,19 @@ export default class Mozblocklist {
     let { existing, newguids } = this.readGuidData(data, blockguids, blockregexes);
     let newguidvalues = [...newguids.values()];
 
-    // Show legacy add-ons
-    let [wx, legacy, invalid] = await this.redash.querySeprateLegacyAndWX(newguidvalues);
-    newguidvalues = wx;
-    if (legacy.length) {
-      console.log(bold("The following guids are for legacy add-ons and will not be blocked:"));
-      console.log(legacy.join("\n"));
-    }
+    if (newguidvalues && newguidvalues.length > 0) {
+      // Show legacy add-ons
+      let [wx, legacy, invalid] = await this.redash.querySeprateLegacyAndWX(newguidvalues);
+      newguidvalues = wx;
+      if (legacy.length) {
+        console.log(bold("The following guids are for legacy add-ons and will not be blocked:"));
+        console.log(legacy.join("\n"));
+      }
 
-    if (invalid.length) {
-      console.log(bold("Warning: the following guids are not in the database:"));
-      console.log(invalid.join("\n"));
+      if (invalid.length) {
+        console.log(bold("Warning: the following guids are not in the database:"));
+        console.log(invalid.join("\n"));
+      }
     }
 
     console.log("");
