@@ -39,13 +39,14 @@ import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType
  */
 
 export default class Mozblocklist {
-  constructor({ kinto, kintoapprover, bugzilla, redash, redash_telemetry, amo }) {
+  constructor({ kinto, kintoapprover, bugzilla, redash, redash_telemetry, amo, usersheet }) {
     this.kinto = kinto;
     this.kintoapprover = kintoapprover;
     this.bugzilla = bugzilla;
     this.redash = redash;
     this.redash_telemetry = redash_telemetry;
     this.amo = amo;
+    this.usersheet = usersheet;
   }
 
   /**
@@ -274,22 +275,50 @@ export default class Mozblocklist {
    */
   async reviewAndSignBlocklist({ selfsign=false, showUsage=false }) {
     let pending = await this.displayPending({ showUsage });
+    let signparams;
     if (pending.data.length) {
-      let ready = await waitForValidInput(`Ready to ${selfsign ? "self-" : ""}sign?`, "yn");
-      if (ready == "y") {
-        await this.signBlocklist({ pending, selfsign, selfreview: selfsign });
-      }
+      signparams = { pending, selfsign, selfreview: selfsign };
     } else if (selfsign) {
       pending = await this.displayPending({ compareWith: "staging", showUsage });
-      if (pending.data.length) {
-        let ready = await waitForValidInput(`Ready to ${selfsign ? "self-" : ""}sign?`, "yn");
-        if (ready == "y") {
-          await this.signBlocklist({ selfsign: true, selfreview: true });
-        }
+      signparams = { selfreview: true, selfsign: true };
+    }
+
+    if (pending && pending.data.length) {
+      let ready = await waitForValidInput(`Ready to ${selfsign ? "self-" : ""}sign?`, "yn");
+      if (ready == "y") {
+        await this.signBlocklist(signparams);
+        await this.recordUsers(pending);
       }
     } else {
       console.log("No staged blocks");
     }
+  }
+
+  /**
+   * Record the users per guid in the user sheet, if configured.
+   *
+   * @param {?object} pending           The pending blocklist data in case it was retrieved
+   *                                      before. This data will not be used when
+   *                                      self-reviewing and self-signing at the same time.
+   */
+  async recordUsers(pending) {
+    if (!this.usersheet.enabled || !pending._usage) {
+      return;
+    }
+
+    let rows = pending.data.reduce((acc, entry) => {
+      let isodate = entry.details.created || new Date(entry.last_modified).toISOString();
+      let cleandate = isodate.replace(/\.\d+Z$/, "").replace("T", " ");
+      let guids = expandGuidRegex(entry.guid);
+      for (let guid of guids) {
+        acc.push([cleandate, guid, entry.details.bug, pending._usage[guid] || 0]);
+      }
+      return acc;
+    }, []);
+
+    let res = await this.usersheet.appendUserRows(rows);
+    let [sheet, range] = res.data.updates.updatedRange.split("!", 2);
+    console.log("Updated user sheet at " + range);
   }
 
   /**
@@ -465,6 +494,7 @@ export default class Mozblocklist {
         console.log(bold("Usage numbers for the following guids were not found:"));
         console.log("\t" + missing.join("\n\t") + "\n");
       }
+      pending._usage = usage;
     }
 
     let comments = pending.data.length ? await this.getCommentsSince(bugData) : {};
