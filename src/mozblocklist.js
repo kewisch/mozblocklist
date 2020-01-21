@@ -510,7 +510,7 @@ export default class Mozblocklist {
 
         if (showUsage) {
           let users = regexToGuids[entry.guid].reduce((acc, guid) => acc + (usage[guid] || 0), 0);
-          console.log(colored(users > HIGH_NUMBER_OF_USERS ? colored.RED : colored.BLACK, "\tUsers: " + DECIMAL_FORMAT.format(users)));
+          console.log(colored(users > HIGH_NUMBER_OF_USERS ? colored.RED : colored.RESET, "\tUsers: " + DECIMAL_FORMAT.format(users)));
         }
 
         if (entry.prefs.length) {

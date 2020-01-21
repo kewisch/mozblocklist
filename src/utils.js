@@ -161,6 +161,7 @@ export function bold(text) {
 export function colored(color, text) {
   return `\x1b[0;${color}m${text}\x1b[0m`;
 }
+colored.RESET = 0;
 colored.BLACK = 30;
 colored.RED = 31;
 colored.GREEN = 32;
