@@ -317,8 +317,8 @@ export default class Mozblocklist {
     }, []);
 
     let res = await this.usersheet.appendUserRows(rows);
-    let [sheet, range] = res.data.updates.updatedRange.split("!", 2);
-    console.log("Updated user sheet at " + range);
+    let range = res.data.updates.updatedRange.split("!", 2);
+    console.log("Updated user sheet at " + range[1]);
   }
 
   /**
