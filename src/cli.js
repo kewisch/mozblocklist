@@ -235,8 +235,12 @@ import os from "os";
     })
   });
 
-  // TODO move this to keytar
-  mozblock.amo.loadCookies(path.join(os.homedir(), ".amo_cookie"));
+  try {
+    // TODO move this to keytar
+    mozblock.amo.loadCookies(path.join(os.homedir(), ".amo_cookie"));
+  } catch (e) {
+    // This can fail if the file doesn't exist or the data is invalid, which is fine.
+  }
 
   switch (argv._[0]) {
     case "list":
