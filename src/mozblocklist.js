@@ -39,7 +39,7 @@ import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType
  */
 
 export default class Mozblocklist {
-  constructor({ kinto, kintoapprover, bugzilla, redash, redash_telemetry, amo, usersheet }) {
+  constructor({ kinto, kintoapprover, bugzilla, redash, redash_telemetry, amo, usersheet, globalOpts }) {
     this.kinto = kinto;
     this.kintoapprover = kintoapprover;
     this.bugzilla = bugzilla;
@@ -47,6 +47,7 @@ export default class Mozblocklist {
     this.redash_telemetry = redash_telemetry;
     this.amo = amo;
     this.usersheet = usersheet;
+    this.globalOpts = globalOpts;
   }
 
   /**
@@ -302,7 +303,17 @@ export default class Mozblocklist {
    *                                      self-reviewing and self-signing at the same time.
    */
   async recordUsers(pending) {
-    if (!this.usersheet.enabled || !pending._usage) {
+    if (!pending._usage) {
+      if (this.globalOpts.debug) {
+        console.log("Could not find usage information to record user sheets");
+      }
+      return;
+    }
+
+    if (!this.usersheet.enabled) {
+      if (this.globalOpts.debug) {
+        console.log("User sheets recording is disabled, check your config");
+      }
       return;
     }
 
@@ -541,6 +552,12 @@ export default class Mozblocklist {
         if (showUsage) {
           let users = regexToGuids[entry.guid].reduce((acc, guid) => acc + (usage[guid] || 0), 0);
           console.log(colored(users > HIGH_NUMBER_OF_USERS ? colored.RED : colored.RESET, "\tUsers: " + DECIMAL_FORMAT.format(users)));
+          if (this.globalOpts.debug) {
+            // This can be a lot of information, only show this on debug
+            for (let guid of regexToGuids[entry.guid]) {
+              console.log(`\t\t${guid} - ${DECIMAL_FORMAT.format(usage[guid])}`);
+            }
+          }
         }
 
         if (entry.prefs.length) {

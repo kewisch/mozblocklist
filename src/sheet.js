@@ -8,9 +8,10 @@ import { waitForInput } from "./utils";
 import { open } from "openurl";
 
 export class GoogleSheets {
-  constructor({ sheetId, credentials, authstore }) {
+  constructor({ sheetId, credentials, authstore, debug }) {
     this.sheetId = sheetId;
     this.storage = authstore;
+    this.debug = debug;
 
     if (credentials) {
       let { client_secret, client_id, redirect_uris } = credentials;
@@ -26,6 +27,9 @@ export class GoogleSheets {
   async authenticate() {
     let tokendata = await this.storage.get();
     if (tokendata) {
+      if (this.debug) {
+        console.log("Reading token data from auth storage");
+      }
       let tokens = JSON.parse(tokendata);
       this.oauth.setCredentials(tokens);
       return;
@@ -36,6 +40,7 @@ export class GoogleSheets {
       scope: ["https://www.googleapis.com/auth/spreadsheets"]
     });
 
+    console.log(`Opening ${authUrl} in your browser`);
     open(authUrl);
     let code = await waitForInput("Google token (from your browser):", false);
     try {
@@ -44,6 +49,9 @@ export class GoogleSheets {
       this.storage.set(JSON.stringify(tokens));
     } catch (e) {
       this.storage.remove();
+      if (this.debug) {
+        console.error("Could not authenticate with Google Sheets:", e);
+      }
       throw e;
     }
   }

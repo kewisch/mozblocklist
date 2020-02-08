@@ -215,6 +215,7 @@ import os from "os";
   let userSheetConfig = config.mozblocklist && config.mozblocklist.userSheet || {}; // eslint-disable-line no-mixed-operators
 
   let mozblock = new Mozblocklist({
+    globalOpts: argv,
     kinto: new BlocklistKintoClient(remote, {
       writer: writer,
       auth: new KintoOAuth(new KeytarAuthStore("mozblocklist", "oauth")),
@@ -231,7 +232,8 @@ import os from "os";
       sheetId: userSheetConfig.sheetId,
       sheetRange: userSheetConfig.sheetRange,
       credentials: userSheetConfig.credentials,
-      authstore: new KeytarAuthStore("mozblocklist", "gsheets")
+      authstore: new KeytarAuthStore("mozblocklist", "gsheets"),
+      debug: argv.debug
     })
   });
 
