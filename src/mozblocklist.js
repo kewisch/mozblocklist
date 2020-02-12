@@ -555,7 +555,7 @@ export default class Mozblocklist {
           if (this.globalOpts.debug) {
             // This can be a lot of information, only show this on debug
             for (let guid of regexToGuids[entry.guid]) {
-              console.log(`\t\t${guid} - ${DECIMAL_FORMAT.format(usage[guid])}`);
+              console.log(`\t\t${guid} - ${DECIMAL_FORMAT.format(usage[guid] || 0)}`);
             }
           }
         }
