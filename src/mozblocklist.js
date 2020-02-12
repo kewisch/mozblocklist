@@ -621,7 +621,15 @@ export default class Mozblocklist {
       case "slug": {
         console.warn(`Converting ${type}s to guids`);
         let result = await this.redash.queryMapIds(type, "guid", data);
-        data = [...Object.values(result)];
+        let found = new Set(Object.keys(result));
+        let missing = data.filter(key => !found.has(key));
+        if (missing.length) {
+          console.warn(bold(`Could not find the following ${type}s:`));
+          console.warn(missing.join("\n"));
+          console.log("");
+        }
+
+        data = Object.values(result);
         break;
       }
       case "mixed":
