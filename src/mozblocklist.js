@@ -653,24 +653,6 @@ export default class Mozblocklist {
     }
 
     let { existing, newguids } = this.readGuidData(data, blockguids, blockregexes);
-    let newguidvalues = [...newguids.values()];
-
-    if (newguidvalues && newguidvalues.length > 0) {
-      // Show legacy add-ons
-      let [wx, legacy, invalid] = await this.redash.querySeprateLegacyAndWX(newguidvalues);
-      newguidvalues = wx;
-      if (legacy.length) {
-        console.log(bold("The following guids are for legacy add-ons and will not be blocked:"));
-        console.log(legacy.join("\n"));
-      }
-
-      if (invalid.length) {
-        console.log(bold("Warning: the following guids are not in the database:"));
-        console.log(invalid.join("\n"));
-      }
-    }
-
-    console.log("");
 
     // Show existing guids for information
     if (existing.size) {
@@ -687,6 +669,30 @@ export default class Mozblocklist {
       console.log([...otherguidset].join("\n"));
       console.log("");
     }
+
+    let newguidvalues = [...newguids.values()];
+    if (newguidvalues && newguidvalues.length > 0) {
+      // Show legacy add-ons, add-ons without any signed files, and unknown/invalid guids
+      let [wx, legacy, unsigned, invalid] = await this.redash.querySeparateLegacyAndUnsigned(newguidvalues);
+      newguidvalues = wx;
+
+      if (unsigned.length) {
+        console.log(bold("The following guids do not have any signed files:"));
+        console.log(unsigned.join("\n"));
+      }
+
+      if (legacy.length) {
+        console.log(bold("The following guids are for legacy add-ons and will not be blocked:"));
+        console.log(legacy.join("\n"));
+      }
+
+      if (invalid.length) {
+        console.log(bold("Warning: the following guids are not in the database:"));
+        console.log(invalid.join("\n"));
+      }
+    }
+
+    console.log("");
 
     // Show a list of new guids that can be blocked
     if (newguidvalues.length > 0) {
