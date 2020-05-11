@@ -615,6 +615,8 @@ export default class Mozblocklist {
       data = await waitForStdin();
     }
 
+    data = data.map(id => id.trim());
+
     let type = detectIdType(data);
     switch (type) {
       case "id":
