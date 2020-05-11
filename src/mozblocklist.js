@@ -69,20 +69,23 @@ export default class Mozblocklist {
       if (!guid || guid.startsWith(COMMENT_CHAR)) {
         continue;
       }
+
+      let regexmatches = [...regexes.keys()].filter(re => guid.match(re));
+
       if (guids.has(guid)) {
         let entry = guids.get(guid);
+        if (regexmatches.length) {
+          console.error(`Warning: ${guid} appears in a single and a regex block: ${regexmatches}`);
+        }
+        existing.set(guid, entry);
+      } else if (regexmatches.length) {
+        if (regexmatches.length > 1) {
+          console.error(`Warning: ${guid} appears in more than one regex block: ${regexmatches}`);
+        }
+        let entry = regexes.get(regexmatches[0]);
         existing.set(guid, entry);
       } else {
-        let regexmatches = [...regexes.keys()].filter(re => guid.match(re));
-        if (regexmatches.length) {
-          if (regexmatches.length > 1) {
-            // console.error(`Warning: ${guid} appears in more than one regex block: ${regexmatches}`);
-          }
-          let entry = regexes.get(regexmatches[0]);
-          existing.set(guid, entry);
-        } else {
-          newguids.add(guid);
-        }
+        newguids.add(guid);
       }
     }
 
