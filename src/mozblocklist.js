@@ -674,8 +674,8 @@ export default class Mozblocklist {
     let newguidvalues = [...newguids.values()];
     if (newguidvalues && newguidvalues.length > 0) {
       // Show legacy add-ons, add-ons without any signed files, and unknown/invalid guids
-      let [wx, legacy, unsigned, invalid] = await this.redash.querySeparateLegacyAndUnsigned(newguidvalues);
-      newguidvalues = wx;
+      let [webex, legacy, unsigned, invalid] = await this.redash.querySeparateLegacyAndUnsigned(newguidvalues);
+      newguidvalues = webex;
 
       if (unsigned.length) {
         console.log(bold("The following guids do not have any signed files:"));

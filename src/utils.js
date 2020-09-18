@@ -174,8 +174,8 @@ colored.CYAN = 36;
 export class CaselessMap extends Map {
   constructor(iterable) {
     let data = [];
-    for (let [k, v] of iterable) {
-      data.push([k.toLowerCase(), v]);
+    for (let [key, value] of iterable) {
+      data.push([key.toLowerCase(), value]);
     }
 
     super(data);
