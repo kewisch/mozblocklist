@@ -5,7 +5,7 @@
 
 import { SingleBar, Presets } from "cli-progress";
 import { waitForStdin, waitForInput, waitForValidInput, bold, colored, getSeverity, createGuidStrings, expandGuidRegex, pluralForm } from "./utils";
-import { COMMENT_CHAR, SOFT_BLOCK, HARD_BLOCK, DECIMAL_FORMAT, HIGH_NUMBER_OF_USERS } from "./constants";
+import { COMMENT_CHAR, HARD_BLOCK, DECIMAL_FORMAT, HIGH_NUMBER_OF_USERS } from "./constants";
 import { ADDON_STATUS, DjangoUserModels, AddonAdminPage, getConfig, detectIdType } from "amolib";
 
 /**
@@ -98,13 +98,12 @@ export default class Mozblocklist {
    * @param {string} name                 The extension name.
    * @param {string} versions             The version range(s).
    * @param {string} reason               The reason to block.
-   * @param {number} severity             The blocklist severity constant.
    * @param {string[]} guids              An array of guids to block.
    * @param {?string} additionalInfo      Additional information for the bug.
    * @param {?string} platformVersions    The platform version range.
    * @return {string}                     The markdown description.
    */
-  compileDescription(name, versions, reason, severity, guids, additionalInfo=null, platformVersions="<all platforms>") {
+  compileDescription(name, versions, reason, guids, additionalInfo=null, platformVersions="<all platforms>") {
     /**
      * Removes backticks from the start of each line for use in a backticked string.
      *
@@ -145,7 +144,6 @@ export default class Mozblocklist {
       ["Extension name", name],
       ["Extension versions affected", versions],
       ["Platforms affected", platformVersions],
-      ["Block severity", getSeverity(severity)]
     ]);
 
     descr += "\n### Reason\n" + unlink(reason);
@@ -833,20 +831,6 @@ export default class Mozblocklist {
       additionalInfo = await waitForInput("Any additional info for the bug?", false);
     }
 
-    let severity;
-    while (true) {
-      severity = await waitForInput("Severity [HARD/soft]:");
-      if (severity == "hard" || severity == "") {
-        severity = HARD_BLOCK;
-        break;
-      } else if (severity == "soft") {
-        severity = SOFT_BLOCK;
-        break;
-      }
-
-      console.log("Invalid severity, must be hard or soft");
-    }
-
     let minVersion = "0";
     let maxVersion = "*";
 
@@ -870,7 +854,8 @@ export default class Mozblocklist {
         });
       } else {
         let versions = minVersion == "0" && maxVersion == "*" ? "<all versions>" : `${minVersion} - ${maxVersion}`;
-        let description = this.compileDescription(name, versions, reason.bugzilla, severity, guids, additionalInfo);
+        let description = this.compileDescription(name, versions, reason.bugzilla, guids, additionalInfo);
+
 
         if (this.bugzilla.readonly) {
           throw new Error("Bugzilla is set to read-only, cannot create bug");
@@ -899,7 +884,7 @@ export default class Mozblocklist {
       }
 
       for (let guidstring of blocks) {
-        let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, severity, minVersion, maxVersion);
+        let entry = await this.kinto.createBlocklistEntry(guidstring, bugid, name, reason.kinto, HARD_BLOCK, minVersion, maxVersion);
         console.log(`${logblockprefix}${this.kinto.remote_writer}/admin/#/buckets/staging/collections/addons/records/${entry.data.id}/attributes`);
       }
 
