@@ -896,10 +896,11 @@ export default class Mozblocklist {
         let users = await this.redash.queryUsersForIds("guid", guids);
         console.log("Banning these users:");
         console.log(users.map(user => `\t${user.user_id} (${user.username} - ${user.display_name})`).join("\n"));
-        await waitForInput("Really go ahead? [yN]");
-
-        let usermodels = new DjangoUserModels(this.amo);
-        await usermodels.ban(users.map(user => user.user_id));
+        shouldBan = await waitForInput("Really go ahead? [yN]");
+        if (shouldBan == "y") {
+          let usermodels = new DjangoUserModels(this.amo);
+          await usermodels.ban(users.map(user => user.user_id));
+        }
       } else {
         console.log("Disabling add-on and files");
         let failedguids = await this.disableAddonAndFiles(guids);
