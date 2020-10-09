@@ -840,7 +840,6 @@ export default class Mozblocklist {
       maxVersion = await waitForInput("Maximum version [*]:") || "*";
     }
 
-    let shouldBan = await waitForInput("Ban involved users? [yN]");
     let answer = await waitForValidInput("Ready to create the blocklist entry?", "yn");
 
     if (answer == "y") {
@@ -892,13 +891,10 @@ export default class Mozblocklist {
         await this.signBlocklist({ selfsign, selfreview: true });
       }
 
-      if (shouldBan == "y") {
-        // First ask the question to double check.
-        let users = await this.redash.queryUsersForIds("guid", guids);
-        console.log("Banning these users:");
-        console.log(users.map(user => `\t${user.user_id} (${user.username} - ${user.display_name})`).join("\n"));
-        shouldBan = await waitForInput("Really go ahead? [yN]");
-      }
+      let users = await this.redash.queryUsersForIds("guid", guids);
+      console.log("The following users are involved with these add-ons:");
+      console.log(users.map(user => `\t${user.user_id} (${user.username} - ${user.display_name})`).join("\n"));
+      let shouldBan = await waitForInput("Should they be banned? [yN]");
 
       if (shouldBan == "y") {
         let usermodels = new DjangoUserModels(this.amo);
