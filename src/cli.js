@@ -11,7 +11,7 @@ import BlocklistKintoClient from "./kinto-client";
 import { KintoBasicAuth, KintoOAuth, KeytarAuthStore } from "./kinto-auth";
 import Mozblocklist from "./mozblocklist";
 import { PUBLIC_HOST, PROD_HOST, STAGE_HOST } from "./constants";
-import { CaselessMap } from "./utils";
+import { CaselessMap, waitForStdin } from "./utils";
 
 import path from "path";
 import os from "os";
@@ -133,7 +133,13 @@ import os from "os";
         " statements to create a table out of them. This is useful for further processing on redash."
         );
     })
-    .command("usage [guids...]", "Show usage for a number of add-ons")
+    .command("usage [guids...]", "Show usage for a number of add-ons", (subyargs) => {
+      subyargs.positional("guids", {
+        describe: "The add-ons guids to get usage info for",
+        type: "string",
+      })
+        .default("guids", [], "<from stdin>");
+    })
     .command("status", "Check the current blocklist status")
     .command("review", "Request review for pending blocklist entries", (subyargs) => {
       subyargs.option("r", {
@@ -287,6 +293,13 @@ import os from "os";
       });
       break;
     case "usage":
+      if (!argv.guids.length) {
+        if (process.stdin.isTTY) {
+          console.warn("Waiting for guids (one per line, Ctrl+D to finish)");
+        }
+        argv.guids = await waitForStdin();
+      }
+
       await mozblock.showUsage(argv.guids);
       break;
     case "sign":

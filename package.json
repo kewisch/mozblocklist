@@ -1,6 +1,6 @@
 {
   "name": "mozblocklist",
-  "version": "2.9.0",
+  "version": "2.9.1",
   "description": "Find and add add-ons to the Mozilla blocklist",
   "main": "src/loader.js",
   "dependencies": {
