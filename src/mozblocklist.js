@@ -474,6 +474,25 @@ export default class Mozblocklist {
     console.log(output.join("\n"));
   }
 
+  async showUsage(guids) {
+    let usage = await this.redash_telemetry.queryUsage(guids);
+    let missing = guids.filter(guid => !(guid in usage));
+    if (missing.length) {
+      console.log(bold("Usage numbers for the following guids were not found:"));
+      console.log("\t" + missing.join("\n\t") + "\n");
+    }
+
+    let total = 0;
+
+    console.log(Object.entries(usage).map(([guid, users]) => {
+      let usercount = colored(users > HIGH_NUMBER_OF_USERS ? colored.RED : colored.RESET, DECIMAL_FORMAT.format(users));
+      total += users;
+      return `${guid} - ${usercount}`;
+    }).join("\n"));
+
+    console.log("\nTotal: " + colored(total > HIGH_NUMBER_OF_USERS ? colored.RED : colored.RESET, DECIMAL_FORMAT.format(total)));
+  }
+
   /**
    * Display pending blocks.
    *

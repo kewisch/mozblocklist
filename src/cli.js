@@ -133,6 +133,7 @@ import os from "os";
         " statements to create a table out of them. This is useful for further processing on redash."
         );
     })
+    .command("usage [guids...]", "Show usage for a number of add-ons")
     .command("status", "Check the current blocklist status")
     .command("review", "Request review for pending blocklist entries", (subyargs) => {
       subyargs.option("r", {
@@ -284,6 +285,9 @@ import os from "os";
         reviewerEmail:  argv.reviewer[1],
         showUsage: argv.usage
       });
+      break;
+    case "usage":
+      await mozblock.showUsage(argv.guids);
       break;
     case "sign":
       await mozblock.reviewAndSignBlocklist({ selfsign: argv.selfsign, showUsage: argv.usage });
