@@ -474,8 +474,8 @@ export default class Mozblocklist {
     console.log(output.join("\n"));
   }
 
-  async showUsage(guids) {
-    let usage = await this.redash_telemetry.queryUsage(guids);
+  async showUsage(guids, refdate) {
+    let usage = await this.redash_telemetry.queryUsage(guids, refdate);
     let missing = guids.filter(guid => !(guid in usage));
     if (missing.length) {
       console.log(bold("Usage numbers for the following guids were not found:"));

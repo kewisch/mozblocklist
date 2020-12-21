@@ -138,7 +138,11 @@ import os from "os";
         describe: "The add-ons guids to get usage info for",
         type: "string",
       })
-        .default("guids", [], "<from stdin>");
+        .default("guids", [], "<from stdin>")
+        .option("r", {
+          alias: "refdate",
+          describe: "The reference date to check usage at. Defaults to now."
+        });
     })
     .command("status", "Check the current blocklist status")
     .command("review", "Request review for pending blocklist entries", (subyargs) => {
@@ -300,7 +304,7 @@ import os from "os";
         argv.guids = await waitForStdin();
       }
 
-      await mozblock.showUsage(argv.guids);
+      await mozblock.showUsage(argv.guids, argv.refdate);
       break;
     case "sign":
       await mozblock.reviewAndSignBlocklist({ selfsign: argv.selfsign, showUsage: argv.usage });
